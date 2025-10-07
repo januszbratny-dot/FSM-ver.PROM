@@ -653,8 +653,8 @@ else:
     st.markdown("""
     <style>
     div.stButton > button:first-child {
-        background-color: lightblue;
-        color: darkblue;
+        background-color: blue;
+        color: white;
     }
     </style>
     """, unsafe_allow_html=True)
