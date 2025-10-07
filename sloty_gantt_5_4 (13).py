@@ -654,7 +654,7 @@ else:
     <style>
     div.stButton > button:first-child {
         background-color: lightblue;
-        color: white;
+        color: darkblue;
     }
     </style>
     """, unsafe_allow_html=True)
