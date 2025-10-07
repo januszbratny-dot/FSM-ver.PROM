@@ -806,7 +806,7 @@ if not df.empty:
 
 # --- Wyświetlanie zleceń bez terminu ---
 if st.session_state.unscheduled_orders:
-    st.markdown("#### 📌 Zlecenia bez terminu")
+    st.markdown("#### 📌 Zlecenia bez terminu - przekazane do Dyspozytora")
     for idx, o in enumerate(st.session_state.unscheduled_orders):
         st.write(f"{idx+1}. {o['client']} — {o['slot_type']} (dodano: {datetime.fromisoformat(o['created']).strftime('%d-%m-%Y %H:%M')})")
         
