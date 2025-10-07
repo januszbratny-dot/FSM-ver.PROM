@@ -671,7 +671,7 @@ else:
             st.rerun()
 
 # --- Przycisk zleć bez terminu ---
-st.markdown("### ⏳ Zlecenia bez terminu")
+st.markdown("### ⏳ Przekazanie zlecenia do Dyspozytora")
 if st.button("Zleć bez terminu"):
     st.session_state.unscheduled_orders.append({
         "client": client_name,
