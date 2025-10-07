@@ -825,16 +825,23 @@ if "unscheduled_orders" not in st.session_state:
     st.session_state.unscheduled_orders = []
 
 
-# Wyświetlanie wszystkich zleceń bez terminu
 if st.session_state.unscheduled_orders:
-    for idx, o in enumerate(st.session_state.unscheduled_orders):
+    # iterujemy po kopii listy, aby być bezpiecznym przy mutacjach
+    for idx, o in enumerate(list(st.session_state.unscheduled_orders)):
         cols = st.columns([3, 2, 1])
         cols[0].write(f"{o['client']} — {o['slot_type']}")
         cols[1].write(f"Dodano: {datetime.fromisoformat(o['created']).strftime('%d-%m-%Y %H:%M')}")
-        if cols[2].button("Usuń", key=f"unsched_del_{idx}"):
-            st.session_state.unscheduled_orders.pop(idx)
+        # klucz guzika uczyniony bardziej unikalnym (idx + timestamp)
+        btn_key = f"unsched_del_{idx}_{o.get('created')}"
+        if cols[2].button("Usuń", key=btn_key):
+            # usuwamy po unikalnym 'created' (stabilniejsze niż index)
+            st.session_state.unscheduled_orders = [
+                x for x in st.session_state.unscheduled_orders if x.get("created") != o.get("created")
+            ]
+            save_state_to_json()          # <- KLUCZ: zapisz zmiany!
             st.success(f"❌ Zlecenie {o['client']} usunięte.")
             st.rerun()
+
 
         
 # ---------------------- GANTT ----------------------
