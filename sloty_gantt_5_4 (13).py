@@ -653,7 +653,7 @@ else:
     st.markdown("""
     <style>
     div.stButton > button:first-child {
-        background-color: blue;
+        background-color: gray;
         color: white;
     }
     </style>
