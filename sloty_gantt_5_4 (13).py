@@ -646,23 +646,6 @@ st.markdown("### 🕒 Dostępne sloty w wybranym dniu")
 slot_minutes = slot_type["minutes"]
 available_slots = get_available_slots_for_day(booking_day, slot_minutes)
 
-button_style = """
-    <style>
-    .green-button button {
-        background-color: #4CAF50;
-        color: white;
-        border: none;
-        padding: 0.35rem 0.7rem;
-        border-radius: 5px;
-        cursor: pointer;
-        font-weight: bold;
-    }
-    .green-button button:hover {
-        background-color: #45a049;
-    }
-    </style>
-"""
-
 st.markdown(button_style, unsafe_allow_html=True)
 
 if not available_slots:
