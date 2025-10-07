@@ -817,11 +817,40 @@ if not df.empty:
             delete_slot(row["Brygada"], row["Dzień"], row["_id"])
             st.rerun()
 
-# --- Wyświetlanie zleceń bez terminu ---
+# ---------------------- ZLECENIA BEZ TERMINU ----------------------
+st.subheader("⏳ Zlecenia bez terminu - Dyspozytor")
+
+# Inicjalizacja listy, jeśli nie istnieje
+if "unscheduled_orders" not in st.session_state:
+    st.session_state.unscheduled_orders = []
+
+# Formularz dodawania nowego zlecenia bez terminu
+with st.expander("➕ Dodaj nowe zlecenie bez terminu"):
+    new_client = st.text_input("Nazwa klienta", key="unsched_client")
+    new_slot_type = st.selectbox(
+        "Typ slotu", [s["name"] for s in st.session_state.slot_types],
+        key="unsched_slot_type"
+    )
+    if st.button("Dodaj zlecenie", key="add_unsched"):
+        st.session_state.unscheduled_orders.append({
+            "client": new_client,
+            "slot_type": new_slot_type,
+            "created": datetime.now().isoformat()
+        })
+        st.success(f"✅ Zlecenie dla {new_client} dodane do listy bez terminu.")
+        st.rerun()
+
+# Wyświetlanie wszystkich zleceń bez terminu
 if st.session_state.unscheduled_orders:
-    st.markdown("#### 📌 Zlecenia bez terminu - przekazane do Dyspozytora")
     for idx, o in enumerate(st.session_state.unscheduled_orders):
-        st.write(f"{idx+1}. {o['client']} — {o['slot_type']} (dodano: {datetime.fromisoformat(o['created']).strftime('%d-%m-%Y %H:%M')})")
+        cols = st.columns([3, 2, 1])
+        cols[0].write(f"{o['client']} — {o['slot_type']}")
+        cols[1].write(f"Dodano: {datetime.fromisoformat(o['created']).strftime('%d-%m-%Y %H:%M')}")
+        if cols[2].button("Usuń", key=f"unsched_del_{idx}"):
+            st.session_state.unscheduled_orders.pop(idx)
+            st.success(f"❌ Zlecenie {o['client']} usunięte.")
+            st.rerun()
+
         
 # ---------------------- GANTT ----------------------
 if not df.empty:
