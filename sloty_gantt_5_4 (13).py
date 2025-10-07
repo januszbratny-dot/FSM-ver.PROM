@@ -73,6 +73,7 @@ def parse_time_str(t: str) -> time:
 # ---------------------- PERSISTENCE ----------------------
 
 def schedules_to_jsonable() -> Dict:
+    """Zwraca dane sesyjne w formacie gotowym do zapisu JSON."""
     data: Dict = {}
 
     for b, days in st.session_state.schedules.items():
@@ -105,11 +106,12 @@ def schedules_to_jsonable() -> Dict:
         "balance_horizon": st.session_state.balance_horizon,
         "client_counter": st.session_state.client_counter,
         "not_found_counter": st.session_state.not_found_counter,
+        "unscheduled_orders": st.session_state.get("unscheduled_orders", []),  # <--- dodane
     }
 
 
 def save_state_to_json(filename: str = STORAGE_FILENAME):
-    """Save state atomically to avoid file corruption on concurrent writes."""
+    """Zapisuje stan aplikacji atomowo do pliku JSON."""
     data = schedules_to_jsonable()
     dirn = os.path.dirname(os.path.abspath(filename)) or "."
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=dirn, delete=False) as tf:
@@ -120,6 +122,7 @@ def save_state_to_json(filename: str = STORAGE_FILENAME):
 
 
 def load_state_from_json(filename: str = STORAGE_FILENAME) -> bool:
+    """Wczytuje stan aplikacji z pliku JSON. Tworzy nowe domyślne wartości, jeśli plik nie istnieje."""
     if not os.path.exists(filename):
         return False
     try:
@@ -159,8 +162,10 @@ def load_state_from_json(filename: str = STORAGE_FILENAME) -> bool:
     st.session_state.balance_horizon = data.get("balance_horizon", "week")
     st.session_state.client_counter = data.get("client_counter", 1)
     st.session_state.not_found_counter = data.get("not_found_counter", 0)
+    st.session_state.unscheduled_orders = data.get("unscheduled_orders", [])  # <--- dodane
     logger.info(f"State loaded from {filename}")
     return True
+
 
 # ---------------------- INITIALIZATION ----------------------
 
