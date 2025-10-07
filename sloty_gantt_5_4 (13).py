@@ -652,14 +652,9 @@ else:
     # Dodaj CSS dla zielonych przycisków (białe litery)
     st.markdown("""
     <style>
-    /* Jasnoniebieski */
-    div.stButton > button.lightblue {
-        background-color: #5bc0de;
+    div.stButton > button:first-child {
+        background-color: lightblue;
         color: white;
-        border-radius: 5px;
-    }
-    div.stButton > button.lightblue:hover {
-        background-color: #31b0d5;
     }
     </style>
     """, unsafe_allow_html=True)
