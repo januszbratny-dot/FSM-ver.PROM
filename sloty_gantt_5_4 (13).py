@@ -603,16 +603,16 @@ week_days = get_week_days(week_ref)
 st.sidebar.write(f"Tydzień: {week_days[0].strftime('%d-%m-%Y')} – {week_days[-1].strftime('%d-%m-%Y')}")
 
 # ---------------------- REZERWACJA SLOTU I ZLECENIA BEZ TERMINU ----------------------
-st.subheader("➕ Rezerwacja terminu / ⏳ Zlecenie do Dyspozytora")
+st.subheader("➕ Rezerwacja terminu")
 
-# Inicjalizacja nazwy klienta w session_state, jeśli nie istnieje
+# Inicjalizacja nazwy klienta w session_state tylko jeśli nie istnieje
 if "client_name_input" not in st.session_state:
     st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
 
 # Pole tekstowe dla nazwy klienta
 client_name = st.text_input(
     "Nazwa klienta",
-    value=st.session_state.get("client_name_input", f"Klient {st.session_state.client_counter}"),
+    value=st.session_state.client_name_input,
     key="client_name_input"
 )
 
@@ -622,11 +622,11 @@ if not slot_names:
     slot_names = ["Standard"]
     st.session_state.slot_types = [{"name": "Standard", "minutes": 60, "weight": 1.0}]
 
-auto_type = weighted_choice(st.session_state.slot_types) or slot_names[0]
+auto_type = random.choices(slot_names, weights=[s.get("weight", 1) for s in st.session_state.slot_types])[0]
 idx = slot_names.index(auto_type) if auto_type in slot_names else 0
 slot_type_name = st.selectbox("Typ slotu", slot_names, index=idx)
 slot_type = next((s for s in st.session_state.slot_types if s["name"] == slot_type_name), slot_names[0])
-slot_minutes = slot_type["minutes"]
+slot_duration = timedelta(minutes=slot_type["minutes"])
 
 # Navigator dni dla rezerwacji
 if "booking_day" not in st.session_state:
@@ -644,8 +644,14 @@ with col_mid:
 
 booking_day = st.session_state.booking_day
 
+# ---------------------- Funkcja do automatycznej zmiany klienta ----------------------
+def next_client():
+    st.session_state.client_counter += 1
+    st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
+
 # --- WIDOK DOSTĘPNYCH SLOTÓW ---
 st.markdown("### 🕒 Dostępne sloty w wybranym dniu")
+slot_minutes = slot_type["minutes"]
 available_slots = get_available_slots_for_day(booking_day, slot_minutes)
 
 if not available_slots:
@@ -665,15 +671,11 @@ else:
                 "client": client_name,
             }
             add_slot_to_brygada(brygada, booking_day, slot)
-
-            # Zaktualizuj licznik i domyślną nazwę klienta
-            st.session_state.client_counter += 1
-            st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
-
+            next_client()  # aktualizujemy klienta po rezerwacji
             st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {brygada}.")
             st.rerun()
 
-# --- PRZEKAZANIE ZLECENIA BEZ TERMINU ---
+# --- Przycisk zleć bez terminu ---
 st.markdown("### ⏳ Przekazanie zlecenia do Dyspozytora")
 if "unscheduled_orders" not in st.session_state:
     st.session_state.unscheduled_orders = []
@@ -684,16 +686,13 @@ if st.button("Zleć bez terminu", key="unscheduled_order"):
         "slot_type": slot_type_name,
         "created": datetime.now().isoformat()
     })
-
-    # Zaktualizuj licznik i domyślną nazwę klienta
-    st.session_state.client_counter += 1
-    st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
-
-    save_state_to_json()
+    next_client()  # aktualizujemy klienta po dodaniu do listy
+    save_state_to_json()  # zapis do pliku
     st.success(f"✅ Zlecenie dla {client_name} dodane do listy bez terminu.")
     st.rerun()
 
-# Wyświetlenie zleceń bez terminu
+# ---------------------- Wyświetlenie listy zleceń bez terminu ----------------------
+st.subheader("⏳ Zlecenia bez terminu - Dyspozytor")
 if st.session_state.unscheduled_orders:
     for idx, o in enumerate(list(st.session_state.unscheduled_orders)):
         cols = st.columns([3, 2, 1])
@@ -707,6 +706,7 @@ if st.session_state.unscheduled_orders:
             save_state_to_json()
             st.success(f"❌ Zlecenie {o['client']} usunięte.")
             st.rerun()
+
 
 # ---------------------- AUTO-FILL FULL DAY (BEZPIECZNY) ----------------------
 st.subheader("⚡ Automatyczne dociążenie wszystkich brygad (przyspieszenie testowania)")
