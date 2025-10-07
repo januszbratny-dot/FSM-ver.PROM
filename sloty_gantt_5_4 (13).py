@@ -428,20 +428,6 @@ def schedule_client_immediately(client_name: str, slot_type_name: str, day: date
     slot_with_meta["brygada"] = brygada
     return True, slot_with_meta
 
-# ============================================================
-# Pomocnicza funkcja: usuwanie zlecenia bez terminu
-# ============================================================
-
-def remove_unscheduled_slot(index: int):
-    """Usuń slot bez terminu po indeksie"""
-    if "Bez terminu" in st.session_state.schedules:
-        slots = st.session_state.schedules["Bez terminu"]
-        if 0 <= index < len(slots):
-            del slots[index]
-            save_state_to_json()
-            st.success("Zlecenie bez terminu zostało usunięte.")
-
-
 # ---------------------- PREDEFINED SLOTS & UTIL ----------------------
 PREFERRED_SLOTS = {
     "8:00-11:00": (time(8, 0), time(11, 0)),
@@ -837,22 +823,6 @@ st.subheader("⏳ Zlecenia bez terminu - Dyspozytor")
 # Inicjalizacja listy, jeśli nie istnieje
 if "unscheduled_orders" not in st.session_state:
     st.session_state.unscheduled_orders = []
-
-# ============================================================
-# Sekcja: Lista zleceń bez terminu
-# ============================================================
-
-with st.expander("Zlecenia bez terminu"):
-    unscheduled = st.session_state.schedules.get("Bez terminu", [])
-    if not unscheduled:
-        st.info("Brak zleceń bez terminu.")
-    else:
-        for i, s in enumerate(unscheduled):
-            cols = st.columns([3, 1])
-            cols[0].write(f"**{s['client_name']}** ({s['duration_min']} min)")
-            if cols[1].button("Usuń", key=f"remove_unscheduled_{i}"):
-                remove_unscheduled_slot(i)
-                st.rerun()
 
 
 # Wyświetlanie wszystkich zleceń bez terminu
