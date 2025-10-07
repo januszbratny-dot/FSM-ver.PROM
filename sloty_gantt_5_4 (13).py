@@ -646,8 +646,6 @@ st.markdown("### 🕒 Dostępne sloty w wybranym dniu")
 slot_minutes = slot_type["minutes"]
 available_slots = get_available_slots_for_day(booking_day, slot_minutes)
 
-st.markdown(button_style, unsafe_allow_html=True)
-
 if not available_slots:
     st.info("Brak dostępnych slotów dla wybranego dnia.")
 else:
