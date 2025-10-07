@@ -609,13 +609,21 @@ st.subheader("➕ Rezerwacja terminu")
 if "unscheduled_orders" not in st.session_state:
     st.session_state.unscheduled_orders = []
 
-# Imię klienta z kluczem w session_state
+# Inicjalizacja klienta i flagi resetu
 if "client_name_input" not in st.session_state:
     st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
+if "reset_client_name" not in st.session_state:
+    st.session_state.reset_client_name = True
 
+# Automatyczna podpowiedź klienta tylko przy pierwszym renderze lub po akcji
+if st.session_state.reset_client_name:
+    st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
+    st.session_state.reset_client_name = False
+
+# Input klienta z możliwością ręcznej edycji
 client_name = st.text_input(
-    "Nazwa klienta", 
-    value=st.session_state.client_name_input, 
+    "Nazwa klienta",
+    value=st.session_state.client_name_input,
     key="client_name_input"
 )
 
@@ -669,9 +677,9 @@ else:
             }
             add_slot_to_brygada(brygada, booking_day, slot)
             
-            # Aktualizacja licznika i inputu klienta
+            # Aktualizacja licznika i flagi resetu dla kolejnego klienta
             st.session_state.client_counter += 1
-            st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
+            st.session_state.reset_client_name = True
             
             st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {brygada}.")
             st.rerun()
@@ -685,15 +693,13 @@ if st.button("Zleć bez terminu", key="unscheduled_order"):
         "created": datetime.now().isoformat()
     })
     
-    # Aktualizacja licznika i inputu klienta
+    # Aktualizacja licznika i flagi resetu dla kolejnego klienta
     st.session_state.client_counter += 1
-    st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
+    st.session_state.reset_client_name = True
     
     save_state_to_json()
     st.success(f"✅ Zlecenie dla {client_name} dodane do listy bez terminu.")
     st.rerun()
-
-
 
 
 # ---------------------- AUTO-FILL FULL DAY (BEZPIECZNY) ----------------------
