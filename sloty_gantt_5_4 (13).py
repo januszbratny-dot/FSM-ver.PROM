@@ -73,7 +73,6 @@ def parse_time_str(t: str) -> time:
 # ---------------------- PERSISTENCE ----------------------
 
 def schedules_to_jsonable() -> Dict:
-    """Zwraca dane sesyjne w formacie gotowym do zapisu JSON."""
     data: Dict = {}
 
     for b, days in st.session_state.schedules.items():
@@ -106,12 +105,11 @@ def schedules_to_jsonable() -> Dict:
         "balance_horizon": st.session_state.balance_horizon,
         "client_counter": st.session_state.client_counter,
         "not_found_counter": st.session_state.not_found_counter,
-        "unscheduled_orders": st.session_state.get("unscheduled_orders", []),  # <--- dodane
     }
 
 
 def save_state_to_json(filename: str = STORAGE_FILENAME):
-    """Zapisuje stan aplikacji atomowo do pliku JSON."""
+    """Save state atomically to avoid file corruption on concurrent writes."""
     data = schedules_to_jsonable()
     dirn = os.path.dirname(os.path.abspath(filename)) or "."
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=dirn, delete=False) as tf:
@@ -122,7 +120,6 @@ def save_state_to_json(filename: str = STORAGE_FILENAME):
 
 
 def load_state_from_json(filename: str = STORAGE_FILENAME) -> bool:
-    """Wczytuje stan aplikacji z pliku JSON. Tworzy nowe domyślne wartości, jeśli plik nie istnieje."""
     if not os.path.exists(filename):
         return False
     try:
@@ -162,10 +159,8 @@ def load_state_from_json(filename: str = STORAGE_FILENAME) -> bool:
     st.session_state.balance_horizon = data.get("balance_horizon", "week")
     st.session_state.client_counter = data.get("client_counter", 1)
     st.session_state.not_found_counter = data.get("not_found_counter", 0)
-    st.session_state.unscheduled_orders = data.get("unscheduled_orders", [])  # <--- dodane
     logger.info(f"State loaded from {filename}")
     return True
-
 
 # ---------------------- INITIALIZATION ----------------------
 
@@ -602,12 +597,8 @@ week_ref = date.today() + timedelta(weeks=st.session_state.week_offset)
 week_days = get_week_days(week_ref)
 st.sidebar.write(f"Tydzień: {week_days[0].strftime('%d-%m-%Y')} – {week_days[-1].strftime('%d-%m-%Y')}")
 
-# ---------------------- Rezerwacja terminu ----------------------
+# ---------------------- Dodaj klienta (Rezerwacja terminu) ----------------------
 st.subheader("➕ Rezerwacja terminu")
-
-# Inicjalizacja listy zleceń bez terminu
-if "unscheduled_orders" not in st.session_state:
-    st.session_state.unscheduled_orders = []
 
 # Imię klienta
 with st.container():
@@ -637,27 +628,50 @@ with col_next:
     if st.button("Następny dzień ➡️", key="booking_next"):
         st.session_state.booking_day += timedelta(days=1)
 with col_mid:
-    st.markdown(f"### {st.session_state.booking_day.strftime('%A, %d %B %Y')}")
+    # Polskie dni tygodnia i miesiące
+    dni_tyg = ["Poniedziałek","Wtorek","Środa","Czwartek","Piątek","Sobota","Niedziela"]
+    miesiace = ["Stycznia","Lutego","Marca","Kwietnia","Maja","Czerwca",
+                "Lipca","Sierpnia","Września","Października","Listopada","Grudnia"]
+    dzien = dni_tyg[st.session_state.booking_day.weekday()]
+    miesiac = miesiace[st.session_state.booking_day.month - 1]
+    st.markdown(f"### {dzien}, {st.session_state.booking_day.day} {miesiac} {st.session_state.booking_day.year}")
 
 booking_day = st.session_state.booking_day
 
 # --- WIDOK DOSTĘPNYCH SLOTÓW ---
 st.markdown("### 🕒 Dostępne sloty w wybranym dniu")
+
 slot_minutes = slot_type["minutes"]
 available_slots = get_available_slots_for_day(booking_day, slot_minutes)
 
 if not available_slots:
     st.info("Brak dostępnych slotów dla wybranego dnia.")
 else:
+    # CSS dla zielonych przycisków
+    st.markdown("""
+    <style>
+    div.stButton > button:first-child {
+        background-color: #28a745;
+        color: white;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     for i, s in enumerate(available_slots):
-        col1, col2, col3, col4 = st.columns([1.2, 2, 1, 1])
-        # Start i Koniec
-        col1.write(f"🚗 Przedział przyjazdu:  {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
+        col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+
+        # Godzina slotu
+        col1.write(f"🚗 Przedział przyjazdu: {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
+
         # Dostępne brygady
         col2.write(f"👷 Brygady: {', '.join(s['brygady'])}")
-        # Przycisk rezerwacji slotu
-        if col4.button("Zarezerwuj", key=f"book_{i}"):
-            brygada = s['brygady'][0]  # wybieramy pierwszą dostępną brygadę
+
+        # Start i Koniec w formacie dd-mm-yyyy HH:MM
+        col3.write(f"⏱️ Start: {s['start'].strftime('%d-%m-%Y %H:%M')}\nKoniec: {s['end'].strftime('%d-%m-%Y %H:%M')}")
+
+        # Przycisk rezerwacji
+        if col4.button(f"Zarezerwuj w tym slocie", key=f"book_{i}"):
+            brygada = s['brygady'][0]  # pierwsza dostępna brygada
             slot = {
                 "start": s["start"],
                 "end": s["end"],
@@ -670,17 +684,18 @@ else:
             st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {brygada}.")
             st.rerun()
 
-# --- Przycisk zleć bez terminu ---
-st.markdown("### ⏳ Zlecenia bez terminu")
-if st.button("Zleć bez terminu"):
+# ---------------------- Przycisk "Zleć bez terminu" ----------------------
+if "unscheduled_orders" not in st.session_state:
+    st.session_state.unscheduled_orders = []
+
+if st.button("📌 Zleć bez terminu", key="unscheduled"):
     st.session_state.unscheduled_orders.append({
         "client": client_name,
         "slot_type": slot_type_name,
-        "created": datetime.now().isoformat()
+        "date_added": datetime.now().strftime("%d-%m-%Y %H:%M")
     })
     st.session_state.client_counter += 1
-    save_state_to_json()  # zapis do pliku
-    st.success(f"✅ Zlecenie dla {client_name} dodane do listy bez terminu.")
+    st.success(f"✅ Zlecenie '{client_name}' dodane do listy bez terminu.")
     st.rerun()
 
 # ---------------------- AUTO-FILL FULL DAY (BEZPIECZNY) ----------------------
@@ -804,11 +819,11 @@ if not df.empty:
             delete_slot(row["Brygada"], row["Dzień"], row["_id"])
             st.rerun()
 
-# --- Wyświetlanie zleceń bez terminu ---
-if st.session_state.unscheduled_orders:
-    st.markdown("#### 📌 Zlecenia bez terminu")
-    for idx, o in enumerate(st.session_state.unscheduled_orders):
-        st.write(f"{idx+1}. {o['client']} — {o['slot_type']} (dodano: {datetime.fromisoformat(o['created']).strftime('%d-%m-%Y %H:%M')})")
+# ---------------------- Sekcja "Zlecenia bez terminu" ----------------------
+if st.session_state.get("unscheduled_orders"):
+    st.subheader("📝 Zlecenia bez terminu")
+    for o in st.session_state.unscheduled_orders:
+        st.write(f"• {o['client']} — {o['slot_type']} (dodane: {o['date_added']})")
         
 # ---------------------- GANTT ----------------------
 if not df.empty:
