@@ -647,31 +647,31 @@ available_slots = get_available_slots_for_day(booking_day, slot_minutes)
 if not available_slots:
     st.info("Brak dostępnych slotów dla wybranego dnia.")
 else:
-    # Dodaj CSS dla zielonych przycisków (białe litery)
+    # CSS dla zielonych przycisków
     st.markdown("""
     <style>
     div.stButton > button:first-child {
-        background-color: grey;
+        background-color: #28a745;
         color: white;
     }
     </style>
     """, unsafe_allow_html=True)
+
     for i, s in enumerate(available_slots):
-        # Zmiana: 4 kolumny - Godzina, Brygady, Start/Koniec, Przycisk
         col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
 
-        # Wyświetl godzinę slotu (tylko godziny)
+        # Godzina slotu
         col1.write(f"🚗 Przedział przyjazdu: {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
 
-        # Wyświetl dostępne brygady
+        # Dostępne brygady
         col2.write(f"👷 Brygady: {', '.join(s['brygady'])}")
 
-        # Kolumna Start i Koniec (pełna data + godzina)
-        col3.write(f"⏱️ Start: {s['start'].strftime('%Y-%m-%d %H:%M')}\nKoniec: {s['end'].strftime('%Y-%m-%d %H:%M')}")
+        # Start i Koniec w formacie dd-mm-yyyy HH:MM
+        col3.write(f"⏱️ Start: {s['start'].strftime('%d-%m-%Y %H:%M')}\nKoniec: {s['end'].strftime('%d-%m-%Y %H:%M')}")
 
-        # Przycisk rezerwacji slotu
+        # Przycisk rezerwacji
         if col4.button(f"Zarezerwuj w tym slocie", key=f"book_{i}"):
-            brygada = s['brygady'][0]  # wybieramy pierwszą dostępną brygadę
+            brygada = s['brygady'][0]  # pierwsza dostępna brygada
             slot = {
                 "start": s["start"],
                 "end": s["end"],
@@ -683,6 +683,26 @@ else:
             st.session_state.client_counter += 1
             st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {brygada}.")
             st.rerun()
+
+# ---------------------- Przycisk "Zleć bez terminu" ----------------------
+if "unscheduled_orders" not in st.session_state:
+    st.session_state.unscheduled_orders = []
+
+if st.button("📌 Zleć bez terminu", key="unscheduled"):
+    st.session_state.unscheduled_orders.append({
+        "client": client_name,
+        "slot_type": slot_type_name,
+        "date_added": datetime.now().strftime("%d-%m-%Y %H:%M")
+    })
+    st.session_state.client_counter += 1
+    st.success(f"✅ Zlecenie '{client_name}' dodane do listy bez terminu.")
+    st.rerun()
+
+# ---------------------- Sekcja "Zlecenia bez terminu" ----------------------
+if st.session_state.get("unscheduled_orders"):
+    st.subheader("📝 Zlecenia bez terminu")
+    for o in st.session_state.unscheduled_orders:
+        st.write(f"• {o['client']} — {o['slot_type']} (dodane: {o['date_added']})")
 
 
 
