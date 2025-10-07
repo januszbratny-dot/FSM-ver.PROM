@@ -668,6 +668,16 @@ st.markdown(button_style, unsafe_allow_html=True)
 if not available_slots:
     st.info("Brak dostępnych slotów dla wybranego dnia.")
 else:
+    # Dodaj CSS dla zielonych przycisków (białe litery)
+    st.markdown("""
+    <style>
+    div.stButton > button:first-child {
+        background-color: #28a745;
+        color: white;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     for i, s in enumerate(available_slots):
         col1, col2, col3, col4 = st.columns([1.2, 2, 1, 1])
         # Start i Koniec
