@@ -698,14 +698,6 @@ if st.button("📌 Zleć bez terminu", key="unscheduled"):
     st.success(f"✅ Zlecenie '{client_name}' dodane do listy bez terminu.")
     st.rerun()
 
-# ---------------------- Sekcja "Zlecenia bez terminu" ----------------------
-if st.session_state.get("unscheduled_orders"):
-    st.subheader("📝 Zlecenia bez terminu")
-    for o in st.session_state.unscheduled_orders:
-        st.write(f"• {o['client']} — {o['slot_type']} (dodane: {o['date_added']})")
-
-
-
 # ---------------------- AUTO-FILL FULL DAY (BEZPIECZNY) ----------------------
 st.subheader("⚡ Automatyczne dociążenie wszystkich brygad (przyspieszenie testowania)")
 
@@ -827,6 +819,12 @@ if not df.empty:
             delete_slot(row["Brygada"], row["Dzień"], row["_id"])
             st.rerun()
 
+# ---------------------- Sekcja "Zlecenia bez terminu" ----------------------
+if st.session_state.get("unscheduled_orders"):
+    st.subheader("📝 Zlecenia bez terminu")
+    for o in st.session_state.unscheduled_orders:
+        st.write(f"• {o['client']} — {o['slot_type']} (dodane: {o['date_added']})")
+        
 # ---------------------- GANTT ----------------------
 if not df.empty:
     st.subheader("📊 Wykres Gantta - tydzień")
