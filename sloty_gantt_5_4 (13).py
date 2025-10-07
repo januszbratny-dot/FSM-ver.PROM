@@ -620,12 +620,12 @@ if st.session_state.reset_client_name:
     st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
     st.session_state.reset_client_name = False
 
-# Input klienta z możliwością ręcznej edycji
+# Input klienta - UWAGA: value usuń, używamy tylko session_state
 client_name = st.text_input(
     "Nazwa klienta",
-    value=st.session_state.client_name_input,
     key="client_name_input"
 )
+
 
 # Wybór typu slotu
 slot_names = [s["name"] for s in st.session_state.slot_types]
