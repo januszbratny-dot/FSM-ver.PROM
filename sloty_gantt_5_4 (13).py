@@ -646,16 +646,36 @@ st.markdown("### 🕒 Dostępne sloty w wybranym dniu")
 slot_minutes = slot_type["minutes"]
 available_slots = get_available_slots_for_day(booking_day, slot_minutes)
 
+button_style = """
+    <style>
+    .green-button button {
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        padding: 0.35rem 0.7rem;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .green-button button:hover {
+        background-color: #45a049;
+    }
+    </style>
+"""
+
+st.markdown(button_style, unsafe_allow_html=True)
+
 if not available_slots:
     st.info("Brak dostępnych slotów dla wybranego dnia.")
 else:
     for i, s in enumerate(available_slots):
         col1, col2, col3, col4 = st.columns([1.2, 2, 1, 1])
         # Start i Koniec
-        col1.write(f"🚗 Przedział przyjazdu:  {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
+        col1.write(f"🚗 Przedział przyjazdu: {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
         # Dostępne brygady
         col2.write(f"👷 Brygady: {', '.join(s['brygady'])}")
-        # Przycisk rezerwacji slotu
+        # Rezerwacja slotu - zielony przycisk
+        btn_html = f'<div class="green-button"><button>Zarezerwuj</button></div>'
         if col4.button("Zarezerwuj", key=f"book_{i}"):
             brygada = s['brygady'][0]  # wybieramy pierwszą dostępną brygadę
             slot = {
@@ -672,7 +692,7 @@ else:
 
 # --- Przycisk zleć bez terminu ---
 st.markdown("### ⏳ Przekazanie zlecenia do Dyspozytora")
-if st.button("Zleć bez terminu"):
+if st.button("Zleć bez terminu", key="unscheduled_order"):
     st.session_state.unscheduled_orders.append({
         "client": client_name,
         "slot_type": slot_type_name,
@@ -682,6 +702,8 @@ if st.button("Zleć bez terminu"):
     save_state_to_json()  # zapis do pliku
     st.success(f"✅ Zlecenie dla {client_name} dodane do listy bez terminu.")
     st.rerun()
+
+
 
 # ---------------------- AUTO-FILL FULL DAY (BEZPIECZNY) ----------------------
 st.subheader("⚡ Automatyczne dociążenie wszystkich brygad (przyspieszenie testowania)")
