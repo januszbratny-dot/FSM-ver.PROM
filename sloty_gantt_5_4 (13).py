@@ -609,23 +609,24 @@ st.subheader("➕ Rezerwacja terminu")
 if "unscheduled_orders" not in st.session_state:
     st.session_state.unscheduled_orders = []
 
-# Inicjalizacja klienta i flagi resetu
+# Flaga kontrolująca automatyczną podpowiedź klienta
+if "client_counter" not in st.session_state:
+    st.session_state.client_counter = 1
 if "client_name_input" not in st.session_state:
     st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
 if "reset_client_name" not in st.session_state:
     st.session_state.reset_client_name = True
 
-# Automatyczna podpowiedź klienta tylko przy pierwszym renderze lub po akcji
+# Automatyczne ustawienie nazwy tylko jeśli reset_client_name = True
 if st.session_state.reset_client_name:
     st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
     st.session_state.reset_client_name = False
 
-# Input klienta - UWAGA: value usuń, używamy tylko session_state
+# Input klienta – wartość jest trzymana w session_state
 client_name = st.text_input(
     "Nazwa klienta",
     key="client_name_input"
 )
-
 
 # Wybór typu slotu
 slot_names = [s["name"] for s in st.session_state.slot_types]
@@ -636,7 +637,7 @@ auto_type = weighted_choice(st.session_state.slot_types) or slot_names[0]
 idx = slot_names.index(auto_type) if auto_type in slot_names else 0
 slot_type_name = st.selectbox("Typ slotu", slot_names, index=idx)
 slot_type = next((s for s in st.session_state.slot_types if s["name"] == slot_type_name), slot_names[0])
-slot_duration = timedelta(minutes=slot_type["minutes"])
+slot_minutes = slot_type["minutes"]
 
 # Navigator dni dla rezerwacji
 if "booking_day" not in st.session_state:
@@ -656,7 +657,6 @@ booking_day = st.session_state.booking_day
 
 # --- WIDOK DOSTĘPNYCH SLOTÓW ---
 st.markdown("### 🕒 Dostępne sloty w wybranym dniu")
-slot_minutes = slot_type["minutes"]
 available_slots = get_available_slots_for_day(booking_day, slot_minutes)
 
 if not available_slots:
@@ -677,7 +677,7 @@ else:
             }
             add_slot_to_brygada(brygada, booking_day, slot)
             
-            # Aktualizacja licznika i flagi resetu dla kolejnego klienta
+            # Po rezerwacji zwiększamy licznik i ustawiamy reset flagi na True
             st.session_state.client_counter += 1
             st.session_state.reset_client_name = True
             
@@ -693,13 +693,14 @@ if st.button("Zleć bez terminu", key="unscheduled_order"):
         "created": datetime.now().isoformat()
     })
     
-    # Aktualizacja licznika i flagi resetu dla kolejnego klienta
+    # Zwiększamy licznik i ustawiamy flagę resetu
     st.session_state.client_counter += 1
     st.session_state.reset_client_name = True
     
     save_state_to_json()
     st.success(f"✅ Zlecenie dla {client_name} dodane do listy bez terminu.")
     st.rerun()
+
 
 
 # ---------------------- AUTO-FILL FULL DAY (BEZPIECZNY) ----------------------
