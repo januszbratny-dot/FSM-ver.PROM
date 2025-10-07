@@ -609,10 +609,15 @@ st.subheader("➕ Rezerwacja terminu")
 if "unscheduled_orders" not in st.session_state:
     st.session_state.unscheduled_orders = []
 
-# Imię klienta
-with st.container():
-    default_client = f"Klient {st.session_state.client_counter}"
-    client_name = st.text_input("Nazwa klienta", value=default_client)
+# Imię klienta z kluczem w session_state
+if "client_name_input" not in st.session_state:
+    st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
+
+client_name = st.text_input(
+    "Nazwa klienta", 
+    value=st.session_state.client_name_input, 
+    key="client_name_input"
+)
 
 # Wybór typu slotu
 slot_names = [s["name"] for s in st.session_state.slot_types]
@@ -649,26 +654,12 @@ available_slots = get_available_slots_for_day(booking_day, slot_minutes)
 if not available_slots:
     st.info("Brak dostępnych slotów dla wybranego dnia.")
 else:
-    # Dodaj CSS dla zielonych przycisków (białe litery)
-    st.markdown("""
-    <style>
-    div.stButton > button:first-child {
-        background-color: gray;
-        color: white;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
     for i, s in enumerate(available_slots):
         col1, col2, col3, col4 = st.columns([1.2, 2, 1, 1])
-        # Start i Koniec
         col1.write(f"🚗 Przedział przyjazdu: {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
-        # Dostępne brygady
         col2.write(f"👷 Brygady: {', '.join(s['brygady'])}")
-        # Rezerwacja slotu - zielony przycisk
-        btn_html = f'<div class="green-button"><button>Zarezerwuj</button></div>'
         if col4.button("Zarezerwuj", key=f"book_{i}"):
-            brygada = s['brygady'][0]  # wybieramy pierwszą dostępną brygadę
+            brygada = s['brygady'][0]
             slot = {
                 "start": s["start"],
                 "end": s["end"],
@@ -677,11 +668,15 @@ else:
                 "client": client_name,
             }
             add_slot_to_brygada(brygada, booking_day, slot)
+            
+            # Aktualizacja licznika i inputu klienta
             st.session_state.client_counter += 1
+            st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
+            
             st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {brygada}.")
             st.rerun()
 
-# --- Przycisk zleć bez terminu ---
+# --- Przekazanie zlecenia do Dyspozytora ---
 st.markdown("### ⏳ Przekazanie zlecenia do Dyspozytora")
 if st.button("Zleć bez terminu", key="unscheduled_order"):
     st.session_state.unscheduled_orders.append({
@@ -689,10 +684,15 @@ if st.button("Zleć bez terminu", key="unscheduled_order"):
         "slot_type": slot_type_name,
         "created": datetime.now().isoformat()
     })
+    
+    # Aktualizacja licznika i inputu klienta
     st.session_state.client_counter += 1
-    save_state_to_json()  # zapis do pliku
+    st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
+    
+    save_state_to_json()
     st.success(f"✅ Zlecenie dla {client_name} dodane do listy bez terminu.")
     st.rerun()
+
 
 
 
