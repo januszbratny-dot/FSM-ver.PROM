@@ -645,6 +645,12 @@ booking_day = st.session_state.booking_day
 st.markdown("### 🕒 Dostępne sloty w wybranym dniu")
 slot_minutes = slot_type["minutes"]
 available_slots = get_available_slots_for_day(booking_day, slot_minutes)
+# 🧍‍♂️ Nazwa klienta (automatyczna lub ręczna)
+client_name = st.text_input(
+    "Nazwa klienta",
+    key="new_client_name",
+    value=f"Klient {st.session_state.client_counter}"
+)
 
 if not available_slots:
     st.info("Brak dostępnych slotów dla wybranego dnia.")
@@ -723,6 +729,8 @@ else:
             st.session_state.client_counter += 1
             st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {brygada}.")
             st.rerun()
+            st.session_state.new_client_name = f"Klient {st.session_state.client_counter}"
+
 
 
 
