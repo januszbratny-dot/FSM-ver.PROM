@@ -49,19 +49,12 @@ def _time_to_iso(t: time) -> str:
 
 
 def parse_datetime_iso(s: Optional[str]) -> Optional[datetime]:
-    """Parse ISO datetimes and return naive datetimes in local time (tzinfo removed).
-       Accepts 'Z' suffix and offsets.
-    """
+    """Parse ISO datetimes; support trailing 'Z' by converting to +00:00."""
     if s is None:
         return None
-    # normalize Z -> +00:00 so fromisoformat can parse
     if s.endswith("Z"):
         s = s[:-1] + "+00:00"
-    dt = datetime.fromisoformat(s)
-    # if tz-aware, convert to local timezone and drop tzinfo
-    if dt.tzinfo is not None:
-        dt = dt.astimezone().replace(tzinfo=None)
-    return dt
+    return datetime.fromisoformat(s)
 
 
 def parse_time_str(t: str) -> time:
@@ -77,21 +70,9 @@ def parse_time_str(t: str) -> time:
                 continue
     raise ValueError(f"Nie można sparsować czasu: {t}")
 
-
-def _normalize_loaded_state():
-    for b, days in st.session_state.schedules.items():
-        for d, slots in days.items():
-            for s in slots:
-                for k in ("start","end","arrival_window_start","arrival_window_end"):
-                    v = s.get(k)
-                    if isinstance(v, datetime) and v.tzinfo is not None:
-                        s[k] = v.astimezone().replace(tzinfo=None)
-
-
 # ---------------------- PERSISTENCE ----------------------
 
 def schedules_to_jsonable() -> Dict:
-    """Zwraca dane sesyjne w formacie gotowym do zapisu JSON."""
     data: Dict = {}
 
     for b, days in st.session_state.schedules.items():
@@ -124,12 +105,11 @@ def schedules_to_jsonable() -> Dict:
         "balance_horizon": st.session_state.balance_horizon,
         "client_counter": st.session_state.client_counter,
         "not_found_counter": st.session_state.not_found_counter,
-        "unscheduled_orders": st.session_state.get("unscheduled_orders", []),  # <--- dodane
     }
 
 
 def save_state_to_json(filename: str = STORAGE_FILENAME):
-    """Zapisuje stan aplikacji atomowo do pliku JSON."""
+    """Save state atomically to avoid file corruption on concurrent writes."""
     data = schedules_to_jsonable()
     dirn = os.path.dirname(os.path.abspath(filename)) or "."
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=dirn, delete=False) as tf:
@@ -140,7 +120,6 @@ def save_state_to_json(filename: str = STORAGE_FILENAME):
 
 
 def load_state_from_json(filename: str = STORAGE_FILENAME) -> bool:
-    """Wczytuje stan aplikacji z pliku JSON. Tworzy nowe domyślne wartości, jeśli plik nie istnieje."""
     if not os.path.exists(filename):
         return False
     try:
@@ -155,12 +134,7 @@ def load_state_from_json(filename: str = STORAGE_FILENAME) -> bool:
 
     st.session_state.working_hours = {}
     for b, wh in data.get("working_hours", {}).items():
-        try:
-            st.session_state.working_hours[b] = (parse_time_str(wh[0]), parse_time_str(wh[1]))
-        except Exception:
-            logger.exception(f"Invalid working_hours for {b}, setting defaults")
-            st.session_state.working_hours[b] = (DEFAULT_WORK_START, DEFAULT_WORK_END)
-
+        st.session_state.working_hours[b] = (parse_time_str(wh[0]), parse_time_str(wh[1]))
 
     st.session_state.schedules = {}
     for b, days in data.get("schedules", {}).items():
@@ -185,30 +159,23 @@ def load_state_from_json(filename: str = STORAGE_FILENAME) -> bool:
     st.session_state.balance_horizon = data.get("balance_horizon", "week")
     st.session_state.client_counter = data.get("client_counter", 1)
     st.session_state.not_found_counter = data.get("not_found_counter", 0)
-    st.session_state.unscheduled_orders = data.get("unscheduled_orders", [])  # <--- dodane
-    _normalize_loaded_state()
     logger.info(f"State loaded from {filename}")
     return True
 
-
 # ---------------------- INITIALIZATION ----------------------
 
-if not load_state_from_json():
-    st.session_state.slot_types = [
-        {"name": "Zlecenie krótkie", "minutes": 30, "weight": 1.0},
-        {"name": "Zlecenie normalne", "minutes": 60, "weight": 1.0},
-        {"name": "Zlecenie długie", "minutes": 90, "weight": 1.0}
-    ]
-    st.session_state.brygady = ["Brygada 1", "Brygada 2"]
-    st.session_state.working_hours = {
-        "Brygada 1": (DEFAULT_WORK_START, DEFAULT_WORK_END),  # 08:00–16:00
-        "Brygada 2": (time(12, 0), time(20, 0))             # 12:00–20:00
-    }
-    st.session_state.schedules = {}
-    st.session_state.clients_added = []
-    st.session_state.balance_horizon = "week"
-    st.session_state.client_counter = 1
-    st.session_state.not_found_counter = 0
+if "slot_types" not in st.session_state:
+    if not load_state_from_json():
+        st.session_state.slot_types = [
+            {"name": "Standard", "minutes": 60, "weight": 1.0}
+        ]
+        st.session_state.brygady = ["Brygada 1", "Brygada 2"]
+        st.session_state.working_hours = {}
+        st.session_state.schedules = {}
+        st.session_state.clients_added = []
+        st.session_state.balance_horizon = "week"
+        st.session_state.client_counter = 1
+        st.session_state.not_found_counter = 0
 
 # stable keys for widgets (avoid using raw brygada names as keys)
 def brygada_key(i: int, field: str) -> str:
@@ -337,21 +304,11 @@ def add_slot_to_brygada(brygada: str, day: date, slot: Dict, save: bool = True):
         s["arrival_window_end"] = None
 
     # Zapisz slot
-    existing = st.session_state.schedules[brygada][d]
-    overlap = any(not (s["end"] <= s_exist["start"] or s["start"] >= s_exist["end"]) for s_exist in existing)
-    if overlap:
-        logger.warning("Próba dodania kolidującego slotu - pomijam")
-        return False
-
-    # jeśli ok:
     st.session_state.schedules[brygada][d].append(s)
     st.session_state.schedules[brygada][d].sort(key=lambda x: x["start"])
 
     if save:
         save_state_to_json()
-
-    return True
-
 
 
 
@@ -572,20 +529,6 @@ def get_available_slots_for_day(day: date, slot_minutes: int, step_minutes: int 
     logging.info(f"DEBUG: get_available_slots_for_day({day}) -> {len(result)} slots")
     return result
 
-# ------------------ inne ------------------
-
-def on_client_name_change():
-    logger.info(f"Zmieniono nazwę klienta na: {st.session_state.client_name}")
-
-def increment_client():
-    st.session_state.client_counter += 1
-    new_name = f"Klient {st.session_state.client_counter}"
-    # przypisujemy od razu do widżetu, jeśli istnieje
-    st.session_state.client_name_input = new_name
-    # synchronizacja ogólnej nazwy klienta
-    st.session_state.client_name = new_name
-
-
 # ---------------------- UI ----------------------
 st.set_page_config(page_title="Harmonogram slotów", layout="wide")
 st.title("📅 Harmonogram slotów - Tydzień")
@@ -650,33 +593,18 @@ week_ref = date.today() + timedelta(weeks=st.session_state.week_offset)
 week_days = get_week_days(week_ref)
 st.sidebar.write(f"Tydzień: {week_days[0].strftime('%d-%m-%Y')} – {week_days[-1].strftime('%d-%m-%Y')}")
 
-# ---------------------- Rezerwacja terminu ----------------------
+# ---------------------- Dodaj klienta (zmieniony UI: wybór dostępnego slotu) ----------------------
 st.subheader("➕ Rezerwacja terminu")
 
-# Inicjalizacja session_state
-st.session_state.setdefault("unscheduled_orders", [])
-st.session_state.setdefault("client_counter", 1)
-st.session_state.setdefault("client_name", f"Klient {st.session_state.client_counter}")
-st.session_state.setdefault("client_name_input", st.session_state.client_name)
+# Imię klienta
+with st.container():
+    default_client = f"Klient {st.session_state.client_counter}"
+    client_name = st.text_input("Nazwa klienta", value=default_client)
 
-
-# Inicjalizacja przy pierwszym renderze
-st.session_state.setdefault("client_name_input", f"Klient {st.session_state.client_counter}")
-st.session_state.setdefault("client_name", st.session_state.client_name_input)
-
-# --- Pole do wprowadzania nazwy klienta ---
-st.text_input(
-    "Nazwa klienta",
-    key="client_name_input",
-    on_change=lambda: st.session_state.update({
-        "client_name": st.session_state.client_name_input
-    })
-)
-
-
-# --- Wybór typu slotu ---
-slot_names = [s["name"] for s in st.session_state.slot_types] if st.session_state.get("slot_types") else ["Standard"]
-if not st.session_state.get("slot_types"):
+# Wybór typu slotu (pozostawiamy)
+slot_names = [s["name"] for s in st.session_state.slot_types]
+if not slot_names:
+    slot_names = ["Standard"]
     st.session_state.slot_types = [{"name": "Standard", "minutes": 60, "weight": 1.0}]
 auto_type = weighted_choice(st.session_state.slot_types) or slot_names[0]
 idx = slot_names.index(auto_type) if auto_type in slot_names else 0
@@ -684,8 +612,10 @@ slot_type_name = st.selectbox("Typ slotu", slot_names, index=idx)
 slot_type = next((s for s in st.session_state.slot_types if s["name"] == slot_type_name), slot_names[0])
 slot_duration = timedelta(minutes=slot_type["minutes"])
 
-# --- Navigator dni dla rezerwacji ---
-st.session_state.setdefault("booking_day", date.today())
+# Navigator dni dla rezerwacji (pojedynczy dzień, z możliwością przejścia)
+if "booking_day" not in st.session_state:
+    st.session_state.booking_day = date.today()
+
 col_prev, col_mid, col_next = st.columns([1, 2, 1])
 with col_prev:
     if st.button("⬅️ Poprzedni dzień", key="booking_prev"):
@@ -698,8 +628,9 @@ with col_mid:
 
 booking_day = st.session_state.booking_day
 
-# --- Dostępne sloty ---
+# --- WIDOK DOSTĘPNYCH SLOTÓW ---
 st.markdown("### 🕒 Dostępne sloty w wybranym dniu")
+
 slot_minutes = slot_type["minutes"]
 available_slots = get_available_slots_for_day(booking_day, slot_minutes)
 
@@ -716,9 +647,12 @@ else:
     }
     </style>
     """, unsafe_allow_html=True)
-
+    
     for i, s in enumerate(available_slots):
-        col1, col2, col3, col4 = st.columns([1.2, 2, 1, 1])
+        col1, col2, col4 = st.columns([2, 2, 1])
+
+        # Wyświetl godzinę slotu
+        # col1.write(f"🕐 {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
 
         # Przedział przyjazdu
         if s.get("arrival_window_start") and s.get("arrival_window_end"):
@@ -740,51 +674,50 @@ else:
         arr_str = f"{arr_start_dt.strftime('%H:%M')} – {arr_end_dt.strftime('%H:%M')}"
         col1.write(f"🚗 Przedział przyjazdu: {arr_str}")
 
-        # Dostępne brygady
+        # Wyświetl dostępne brygady
         col2.write(f"👷 Brygady: {', '.join(s['brygady'])}")
 
-        # --- Przycisk rezerwacji ---
-        if col4.button("Zarezerwuj", key=f"book_{i}"):
-            brygada = s['brygady'][0]
+        # Oblicz przedział przyjazdu na podstawie ustawień
+        #czas_przed = int(st.session_state.get('czas_rezerwowy_przed', 90))
+        #czas_po = int(st.session_state.get('czas_rezerwowy_po', 90))
+        #arrival_start, arrival_end = oblicz_przedzial_przyjazdu(s['start'], czas_przed, czas_po)
+        #col3.write(f"🚗 Przedział przyjazdu: {arrival_start.strftime('%H:%M')} – {arrival_end.strftime('%H:%M')}")
+
+        # Przycisk rezerwacji slotu
+        if col4.button("Zarezerwuj w tym slocie", key=f"book_{i}"):
+            brygada = s['brygady'][0]  # wybieramy pierwszą dostępną brygadę
             slot = {
                 "start": s["start"],
                 "end": s["end"],
                 "slot_type": slot_type_name,
                 "duration_min": slot_minutes,
-                "client": st.session_state.client_name,
+                "client": client_name,
             }
             add_slot_to_brygada(brygada, booking_day, slot)
-
-            # automatyczne przypisanie nowego klienta tylko do client_name, widżet sam się zaktualizuje
             st.session_state.client_counter += 1
-            st.session_state.client_name = f"Klient {st.session_state.client_counter}"
-
-            save_state_to_json()
-            st.success(f"✅ Zarezerwowano slot dla {slot['client']}.")
-            st.rerun()  # używamy erun()
+            st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {brygada}.")
+            st.rerun()
 
 # --- Przycisk „Zleć bez terminu” ---
 st.markdown("### ⏳ Przekazanie zlecenia do Dyspozytora")
 if st.button("Zleć bez terminu", key="unscheduled_order"):
     st.session_state.unscheduled_orders.append({
-        "client": st.session_state.client_name,
+        "client": client_name,
         "slot_type": slot_type_name,
         "created": datetime.now().isoformat()
     })
 
     # automatyczne przypisanie nowego klienta tylko do client_name
     st.session_state.client_counter += 1
-    st.session_state.client_name = f"Klient {st.session_state.client_counter}"
+    #st.session_state.client_name = f"Klient {st.session_state.client_counter}"
 
     save_state_to_json()
-    st.success(f"✅ Zlecenie dla {st.session_state.client_name} dodane do listy bez terminu.")
-    st.experimental_rerun()
-
-
+    st.success(f"✅ Zlecenie dla {client_name} dodane do listy bez terminu.")
+    st.rerun()
 
 
 # ---------------------- AUTO-FILL FULL DAY (BEZPIECZNY) ----------------------
-st.subheader("⚡ Automatyczne dociążenie wszystkich brygad (przyspieszenie testowania)")
+st.subheader("⚡ Automatyczne dociążenie wszystkich brygad")
 
 # wybór dnia do autofill
 day_autofill = st.date_input(
@@ -929,8 +862,6 @@ if st.session_state.unscheduled_orders:
             st.success(f"❌ Zlecenie {o['client']} usunięte.")
             st.rerun()
 
-
-        
 # ---------------------- GANTT ----------------------
 if not df.empty:
     st.subheader("📊 Wykres Gantta - tydzień")
