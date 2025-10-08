@@ -332,11 +332,21 @@ def add_slot_to_brygada(brygada: str, day: date, slot: Dict, save: bool = True):
         s["arrival_window_end"] = None
 
     # Zapisz slot
+    existing = st.session_state.schedules[brygada][d]
+    overlap = any(not (s["end"] <= s_exist["start"] or s["start"] >= s_exist["end"]) for s_exist in existing)
+    if overlap:
+        logger.warning("Próba dodania kolidującego slotu - pomijam")
+        return False
+
+    # jeśli ok:
     st.session_state.schedules[brygada][d].append(s)
     st.session_state.schedules[brygada][d].sort(key=lambda x: x["start"])
 
     if save:
         save_state_to_json()
+
+    return True
+
 
 
 
