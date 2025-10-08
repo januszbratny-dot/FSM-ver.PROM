@@ -49,12 +49,19 @@ def _time_to_iso(t: time) -> str:
 
 
 def parse_datetime_iso(s: Optional[str]) -> Optional[datetime]:
-    """Parse ISO datetimes; support trailing 'Z' by converting to +00:00."""
+    """Parse ISO datetimes and return naive datetimes in local time (tzinfo removed).
+       Accepts 'Z' suffix and offsets.
+    """
     if s is None:
         return None
+    # normalize Z -> +00:00 so fromisoformat can parse
     if s.endswith("Z"):
         s = s[:-1] + "+00:00"
-    return datetime.fromisoformat(s)
+    dt = datetime.fromisoformat(s)
+    # if tz-aware, convert to local timezone and drop tzinfo
+    if dt.tzinfo is not None:
+        dt = dt.astimezone().replace(tzinfo=None)
+    return dt
 
 
 def parse_time_str(t: str) -> time:
