@@ -659,13 +659,15 @@ st.session_state.setdefault("client_counter", 1)
 st.session_state.setdefault("client_name", f"Klient {st.session_state.client_counter}")
 st.session_state.setdefault("client_name_input", st.session_state.client_name)
 
-# --- Pole do wprowadzania nazwy klienta ---
-st.session_state.setdefault("client_name_input", st.session_state.client_name)
 
+# Inicjalizacja przy pierwszym renderze
+st.session_state.setdefault("client_name_input", f"Klient {st.session_state.client_counter}")
+st.session_state.setdefault("client_name", st.session_state.client_name_input)
+
+# --- Pole do wprowadzania nazwy klienta ---
 st.text_input(
     "Nazwa klienta",
     key="client_name_input",
-    value=st.session_state.client_name_input,
     on_change=lambda: st.session_state.update({
         "client_name": st.session_state.client_name_input
     })
