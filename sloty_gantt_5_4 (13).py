@@ -578,18 +578,12 @@ def on_client_name_change():
     logger.info(f"Zmieniono nazwę klienta na: {st.session_state.client_name}")
 
 def increment_client():
-    # zwiększenie licznika klienta
     st.session_state.client_counter += 1
-
-    # nowa nazwa klienta
     new_name = f"Klient {st.session_state.client_counter}"
-
-    # aktualizacja session_state
+    # przypisujemy od razu do widżetu, jeśli istnieje
+    st.session_state.client_name_input = new_name
+    # synchronizacja ogólnej nazwy klienta
     st.session_state.client_name = new_name
-
-    # jeśli widżet istnieje, synchronizujemy go
-    if "client_name_input" in st.session_state:
-        st.session_state.client_name_input = new_name
 
 
 # ---------------------- UI ----------------------
