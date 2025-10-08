@@ -710,30 +710,19 @@ else:
         col2.write(f"👷 Brygady: {', '.join(s['brygady'])}")
         # Rezerwacja slotu - zielony przycisk
         btn_html = f'<div class="green-button"><button>Zarezerwuj</button></div>'
-        if col4.button("Zarezerwuj", key=f"book_{i}"):
-            brygada = s['brygady'][0]  # wybieramy pierwszą dostępną brygadę
-        
-            # 🛡️ Bezpieczne pobranie godzin pracy
-            working_hours = st.session_state.get("working_hours", {})
-            brygada_hours = working_hours.get(brygada, {"start": time(8, 0), "end": time(16, 0)})
-            work_start, work_end = brygada_hours["start"], brygada_hours["end"]
-        
-            add_slot_to_brygada(
-                brygada=brygada,
-                day=booking_day,
-                slot_type=slot_type_name,
-                duration_min=slot_minutes,
-                client=client_name,
-                work_start=work_start,
-                work_end=work_end,
-            )
-        
-            st.session_state.client_counter += 1
-            st.success(
-                f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} "
-                f"w brygadzie {brygada}."
-            )
-            st.rerun()
+                if col4.button("Zarezerwuj", key=f"book_{i}"):
+                    brygada = s['brygady'][0]  # wybieramy pierwszą dostępną brygadę
+                    slot = {
+                        "start": s["start"],
+                        "end": s["end"],
+                        "slot_type": slot_type_name,
+                        "duration_min": slot_minutes,
+                        "client": client_name,
+                    }
+                    add_slot_to_brygada(brygada, booking_day, slot)
+                    st.session_state.client_counter += 1
+                    st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {brygada}.")
+                    st.rerun()
 
 
 
