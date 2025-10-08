@@ -660,13 +660,17 @@ st.session_state.setdefault("client_name", f"Klient {st.session_state.client_cou
 st.session_state.setdefault("client_name_input", st.session_state.client_name)
 
 # --- Pole do wprowadzania nazwy klienta ---
+st.session_state.setdefault("client_name_input", st.session_state.client_name)
+
 st.text_input(
     "Nazwa klienta",
     key="client_name_input",
+    value=st.session_state.client_name_input,
     on_change=lambda: st.session_state.update({
         "client_name": st.session_state.client_name_input
     })
 )
+
 
 # --- Wybór typu slotu ---
 slot_names = [s["name"] for s in st.session_state.slot_types] if st.session_state.get("slot_types") else ["Standard"]
