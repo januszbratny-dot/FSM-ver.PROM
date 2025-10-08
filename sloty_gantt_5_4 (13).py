@@ -650,75 +650,13 @@ week_ref = date.today() + timedelta(weeks=st.session_state.week_offset)
 week_days = get_week_days(week_ref)
 st.sidebar.write(f"Tydzień: {week_days[0].strftime('%d-%m-%Y')} – {week_days[-1].strftime('%d-%m-%Y')}")
 
-# ---------------------- Rezerwacja terminu ----------------------
-st.subheader("➕ Rezerwacja terminu")
-
-# Inicjalizacja listy zleceń bez terminu
-if "unscheduled_orders" not in st.session_state:
-    st.session_state.unscheduled_orders = []
-
-# Imię klienta
-if "client_name" not in st.session_state:
-    st.session_state.client_name = f"Klient {st.session_state.client_counter}"
-
-with st.container():
-    # upewnij się, że klucz istnieje
-    st.session_state.setdefault(
-        "client_name_input", f"Klient {st.session_state.client_counter}"
-    )
-
-    st.text_input(
-        "Nazwa klienta",
-        key="client_name_input",
-        value=st.session_state.client_name_input,
-    )
-
-    # synchronizacja nazwy klienta z widżetem
-    st.session_state.client_name = st.session_state.client_name_input
-
-
-
-# Wybór typu slotu
-slot_names = [s["name"] for s in st.session_state.slot_types]
-if not slot_names:
-    slot_names = ["Standard"]
-    st.session_state.slot_types = [{"name": "Standard", "minutes": 60, "weight": 1.0}]
-auto_type = weighted_choice(st.session_state.slot_types) or slot_names[0]
-idx = slot_names.index(auto_type) if auto_type in slot_names else 0
-slot_type_name = st.selectbox("Typ slotu", slot_names, index=idx)
-slot_type = next((s for s in st.session_state.slot_types if s["name"] == slot_type_name), slot_names[0])
-slot_duration = timedelta(minutes=slot_type["minutes"])
-
-# Navigator dni dla rezerwacji
-if "booking_day" not in st.session_state:
-    st.session_state.booking_day = date.today()
-
-col_prev, col_mid, col_next = st.columns([1, 2, 1])
-with col_prev:
-    if st.button("⬅️ Poprzedni dzień", key="booking_prev"):
-        st.session_state.booking_day -= timedelta(days=1)
-with col_next:
-    if st.button("Następny dzień ➡️", key="booking_next"):
-        st.session_state.booking_day += timedelta(days=1)
-with col_mid:
-    st.markdown(f"### {st.session_state.booking_day.strftime('%A, %d %B %Y')}")
-
-booking_day = st.session_state.booking_day
-
-# --- WIDOK DOSTĘPNYCH SLOTÓW ---
-st.markdown("### 🕒 Dostępne sloty w wybranym dniu")
-slot_minutes = slot_type["minutes"]
-available_slots = get_available_slots_for_day(booking_day, slot_minutes)
-# 🧍‍♂️ Nazwa klienta (automatyczna lub ręczna) - uwuga dubel do usuniecia
-# client_name = st.text_input("Nazwa klienta",key="new_client_name",value=f"Klient {st.session_state.client_counter}") 
-
-client_name = st.session_state.client_name
-
+# ---------------------- Rezerwacja slotu ----------------------
+client_name = st.session_state.client_name  # aktualna nazwa klienta z text_input
 
 if not available_slots:
     st.info("Brak dostępnych slotów dla wybranego dnia.")
 else:
-    # Dodaj CSS dla zielonych przycisków (białe litery)
+    # Dodaj CSS dla przycisków
     st.markdown("""
     <style>
     div.stButton > button:first-child {
@@ -730,55 +668,42 @@ else:
     
     for i, s in enumerate(available_slots):
         col1, col2, col3, col4 = st.columns([1.2, 2, 1, 1])
-        # Start i Koniec
-        #col1.write(f"🚗 Przedział przyjazdu: {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
 
-        # pokaż przedział przyjazdu tak jak w tabeli (najpierw sprawdź, czy pole istnieje; jeśli nie — oblicz)
+        # Oblicz przedział przyjazdu
         if s.get("arrival_window_start") and s.get("arrival_window_end"):
             arr_start_dt = s["arrival_window_start"]
             arr_end_dt = s["arrival_window_end"]
         else:
-            # użyj pierwszej dostępnej brygady do obliczenia przedziału (tak jak przy dodawaniu slotu)
-            brygada_for_display = s["brygady"][0] if s.get("brygady") else (st.session_state.brygady[0] if st.session_state.brygady else None)
-            try:
-                czas_przed = int(st.session_state.get("czas_rezerwowy_przed", 90))
-                czas_po = int(st.session_state.get("czas_rezerwowy_po", 90))
-            except Exception:
-                czas_przed = 90
-                czas_po = 90
-        
+            brygada_for_display = s["brygady"][0] if s.get("brygady") else st.session_state.brygady[0]
+            czas_przed = int(st.session_state.get("czas_rezerwowy_przed", 90))
+            czas_po = int(st.session_state.get("czas_rezerwowy_po", 90))
             wh_start, wh_end = st.session_state.working_hours.get(brygada_for_display, (DEFAULT_WORK_START, DEFAULT_WORK_END))
             wh_start_dt = datetime.combine(booking_day, wh_start)
             wh_end_dt = datetime.combine(booking_day, wh_end)
             if wh_end_dt <= wh_start_dt:  # nocna zmiana
                 wh_end_dt += timedelta(days=1)
-        
+
             start_dt = s["start"]
             arr_start_dt = start_dt - timedelta(minutes=czas_przed)
             arr_end_dt = start_dt + timedelta(minutes=czas_po)
-        
             if arr_start_dt < wh_start_dt:
                 arr_start_dt = wh_start_dt
                 arr_end_dt = arr_start_dt + timedelta(minutes=czas_przed + czas_po)
-        
             if arr_end_dt > wh_end_dt:
                 arr_end_dt = wh_end_dt
                 arr_start_dt = arr_end_dt - timedelta(minutes=czas_przed + czas_po)
-        
-            # ostateczne przycięcie na wypadek krótkiego dnia
             if arr_start_dt < wh_start_dt:
                 arr_start_dt = wh_start_dt
             if arr_end_dt > wh_end_dt:
                 arr_end_dt = wh_end_dt
-        
+
         arr_str = f"{arr_start_dt.strftime('%H:%M')} – {arr_end_dt.strftime('%H:%M')}"
         col1.write(f"🚗 Przedział przyjazdu: {arr_str}")
 
-
         # Dostępne brygady
         col2.write(f"👷 Brygady: {', '.join(s['brygady'])}")
-        # Rezerwacja slotu - zielony przycisk
-        # btn_html = f'<div class="green-button"><button>Zarezerwuj</button></div>'
+
+        # Przycisk rezerwacji
         if col4.button("Zarezerwuj", key=f"book_{i}"):
             brygada = s['brygady'][0]
             slot = {
@@ -789,27 +714,32 @@ else:
                 "client": st.session_state.client_name,
             }
             add_slot_to_brygada(brygada, booking_day, slot)
-            increment_client()            
+
+            # Zwiększenie licznika klienta
+            st.session_state.client_counter += 1
+            st.session_state.client_name = f"Klient {st.session_state.client_counter}"
+
             save_state_to_json()
-            st.success(f"✅ Zarezerwowano slot dla {st.session_state.client_name}.")
+            st.success(f"✅ Zarezerwowano slot dla {slot['client']}.")
             st.rerun()
 
-            
 
-            
-# --- Przycisk zleć bez terminu ---
+# ---------------------- Zleć bez terminu ----------------------
 st.markdown("### ⏳ Przekazanie zlecenia do Dyspozytora")
 if st.button("Zleć bez terminu", key="unscheduled_order"):
     st.session_state.unscheduled_orders.append({
-        "client": client_name,
+        "client": st.session_state.client_name,
         "slot_type": slot_type_name,
         "created": datetime.now().isoformat()
     })
-    increment_client()
-    save_state_to_json()  # zapis do pliku
+
+    # Zwiększenie licznika klienta
+    st.session_state.client_counter += 1
+    st.session_state.client_name = f"Klient {st.session_state.client_counter}"
+
+    save_state_to_json()
     st.success(f"✅ Zlecenie dla {client_name} dodane do listy bez terminu.")
     st.rerun()
-    
 
 
 
