@@ -658,18 +658,12 @@ if "unscheduled_orders" not in st.session_state:
 if "client_name" not in st.session_state:
     st.session_state.client_name = f"Klient {st.session_state.client_counter}"
 
-#with st.container():
-#    default_client = f"Klient {st.session_state.client_counter}"
-#    client_name = st.text_input("Nazwa klienta", value=default_client)
-
 with st.container():
-    def on_client_name_change():
-        logger.info(f"Zmieniono nazwę klienta na: {st.session_state.client_name}")
-
+    st.session_state.setdefault("client_name_input", f"Klient {st.session_state.client_counter}")
     st.text_input(
         "Nazwa klienta",
         key="client_name_input",
-        value=st.session_state.get("client_name", f"Klient {st.session_state.client_counter}"),
+        value=st.session_state.client_name_input,
     )
     st.session_state.client_name = st.session_state.client_name_input
 
