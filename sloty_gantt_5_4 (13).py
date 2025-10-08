@@ -657,15 +657,17 @@ st.subheader("➕ Rezerwacja terminu")
 st.session_state.setdefault("unscheduled_orders", [])
 st.session_state.setdefault("client_counter", 1)
 st.session_state.setdefault("client_name", f"Klient {st.session_state.client_counter}")
-st.session_state.setdefault("client_name_input", st.session_state.client_name)
 
 # --- Pole do wprowadzania nazwy klienta ---
 st.text_input(
     "Nazwa klienta",
-    key="client_name_input"
+    key="client_name_input",
+    on_change=lambda: st.session_state.update({
+        "client_name": st.session_state.client_name_input
+    })
 )
 
-# Synchronizacja nazwy klienta z widżetem
+# Synchronizacja nazwy klienta
 st.session_state.client_name = st.session_state.client_name_input
 
 # --- Wybór typu slotu ---
@@ -728,10 +730,8 @@ else:
             if wh_end_dt <= wh_start_dt:
                 wh_end_dt += timedelta(days=1)
             start_dt = s["start"]
-            arr_start_dt = start_dt - timedelta(minutes=czas_przed)
-            arr_end_dt = start_dt + timedelta(minutes=czas_po)
-            arr_start_dt = max(arr_start_dt, wh_start_dt)
-            arr_end_dt = min(arr_end_dt, wh_end_dt)
+            arr_start_dt = max(start_dt - timedelta(minutes=czas_przed), wh_start_dt)
+            arr_end_dt = min(start_dt + timedelta(minutes=czas_po), wh_end_dt)
 
         arr_str = f"{arr_start_dt.strftime('%H:%M')} – {arr_end_dt.strftime('%H:%M')}"
         col1.write(f"🚗 Przedział przyjazdu: {arr_str}")
@@ -755,7 +755,7 @@ else:
             st.session_state.client_counter += 1
             new_client_name = f"Klient {st.session_state.client_counter}"
             st.session_state.client_name = new_client_name
-            st.session_state.client_name_input = new_client_name
+            # nie ustawiamy client_name_input, żeby nie konfliktował z text_input
 
             save_state_to_json()
             st.success(f"✅ Zarezerwowano slot dla {slot['client']}.")
@@ -774,7 +774,7 @@ if st.button("Zleć bez terminu", key="unscheduled_order"):
     st.session_state.client_counter += 1
     new_client_name = f"Klient {st.session_state.client_counter}"
     st.session_state.client_name = new_client_name
-    st.session_state.client_name_input = new_client_name
+    # nie ustawiamy client_name_input
 
     save_state_to_json()
     st.success(f"✅ Zlecenie dla {st.session_state.client_name} dodane do listy bez terminu.")
