@@ -181,9 +181,9 @@ def load_state_from_json(filename: str = STORAGE_FILENAME) -> bool:
     st.session_state.client_counter = data.get("client_counter", 1)
     st.session_state.not_found_counter = data.get("not_found_counter", 0)
     st.session_state.unscheduled_orders = data.get("unscheduled_orders", [])  # <--- dodane
+    _normalize_loaded_state()
     logger.info(f"State loaded from {filename}")
     return True
-    _normalize_loaded_state()
 
 
 # ---------------------- INITIALIZATION ----------------------
