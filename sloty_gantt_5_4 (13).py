@@ -712,17 +712,31 @@ else:
         btn_html = f'<div class="green-button"><button>Zarezerwuj</button></div>'
         if col4.button("Zarezerwuj", key=f"book_{i}"):
             brygada = s['brygady'][0]  # wybieramy pierwszą dostępną brygadę
-            slot = {
-                "start": s["start"],
-                "end": s["end"],
-                "slot_type": slot_type_name,
-                "duration_min": slot_minutes,
-                "client": client_name,
-            }
-            add_slot_to_brygada(brygada, booking_day, slot)
+        
+            # wyciągamy godziny pracy brygady (potrzebne dla logiki okna przyjazdu)
+            work_start, work_end = st.session_state["working_hours"][brygada].values()
+        
+            add_slot_to_brygada(
+                brygada=brygada,
+                day=booking_day,
+                slot_type=slot_type_name,
+                duration_min=slot_minutes,
+                client=client_name,
+                work_start=work_start,
+                work_end=work_end,
+            )
+        
+            # ✅ zwiększamy licznik klienta po rezerwacji
             st.session_state.client_counter += 1
-            st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {brygada}.")
+        
+            st.success(
+                f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} "
+                f"w brygadzie {brygada}."
+            )
+        
+            # natychmiastowe odświeżenie UI (pokazuje zaktualizowany stan i nową nazwę klienta)
             st.rerun()
+
 
 # --- Przycisk zleć bez terminu ---
 st.markdown("### ⏳ Przekazanie zlecenia do Dyspozytora")
