@@ -768,7 +768,7 @@ else:
         # Dostępne brygady
         col2.write(f"👷 Brygady: {', '.join(s['brygady'])}")
         # Rezerwacja slotu - zielony przycisk
-        btn_html = f'<div class="green-button"><button>Zarezerwuj</button></div>'
+        # btn_html = f'<div class="green-button"><button>Zarezerwuj</button></div>'
         if col4.button("Zarezerwuj", key=f"book_{i}"):
             brygada = s['brygady'][0]
             slot = {
@@ -780,10 +780,10 @@ else:
             }
             add_slot_to_brygada(brygada, booking_day, slot)
             st.session_state.client_counter += 1
-            
-            # 🟢 zamiast bezpośredniego przypisania do client_name:
             new_name = f"Klient {st.session_state.client_counter}"
-            st.session_state.update({"client_name": new_name})
+            st.session_state.client_name = new_name
+            st.session_state.client_name_input = new_name  # synchronizacja z widżetem
+
             
             save_state_to_json()
             st.success(f"✅ Zarezerwowano slot dla {st.session_state.client_name}.")
@@ -801,7 +801,10 @@ if st.button("Zleć bez terminu", key="unscheduled_order"):
         "created": datetime.now().isoformat()
     })
     st.session_state.client_counter += 1
-    st.session_state.client_name = f"Klient {st.session_state.client_counter}"
+    new_name = f"Klient {st.session_state.client_counter}"
+    st.session_state.client_name = new_name
+    st.session_state.client_name_input = new_name  # synchronizacja z widżetem
+
     save_state_to_json()  # zapis do pliku
     st.success(f"✅ Zlecenie dla {client_name} dodane do listy bez terminu.")
     st.rerun()
