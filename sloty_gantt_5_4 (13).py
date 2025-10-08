@@ -577,6 +577,12 @@ def get_available_slots_for_day(day: date, slot_minutes: int, step_minutes: int 
 def on_client_name_change():
     logger.info(f"Zmieniono nazwę klienta na: {st.session_state.client_name}")
 
+def increment_client():
+    st.session_state.client_counter += 1
+    new_name = f"Klient {st.session_state.client_counter}"
+    st.session_state.client_name = new_name
+    st.session_state.client_name_input = new_name
+
 # ---------------------- UI ----------------------
 st.set_page_config(page_title="Harmonogram slotów", layout="wide")
 st.title("📅 Harmonogram slotów - Tydzień")
@@ -779,12 +785,7 @@ else:
                 "client": st.session_state.client_name,
             }
             add_slot_to_brygada(brygada, booking_day, slot)
-            st.session_state.client_counter += 1
-            new_name = f"Klient {st.session_state.client_counter}"
-            st.session_state.client_name = new_name
-            st.session_state.client_name_input = new_name  # synchronizacja z widżetem
-
-            
+            increment_client()            
             save_state_to_json()
             st.success(f"✅ Zarezerwowano slot dla {st.session_state.client_name}.")
             st.rerun()
@@ -800,11 +801,7 @@ if st.button("Zleć bez terminu", key="unscheduled_order"):
         "slot_type": slot_type_name,
         "created": datetime.now().isoformat()
     })
-    st.session_state.client_counter += 1
-    new_name = f"Klient {st.session_state.client_counter}"
-    st.session_state.client_name = new_name
-    st.session_state.client_name_input = new_name  # synchronizacja z widżetem
-
+    increment_client()
     save_state_to_json()  # zapis do pliku
     st.success(f"✅ Zlecenie dla {client_name} dodane do listy bez terminu.")
     st.rerun()
