@@ -657,6 +657,8 @@ st.subheader("➕ Rezerwacja terminu")
 st.session_state.setdefault("unscheduled_orders", [])
 st.session_state.setdefault("client_counter", 1)
 st.session_state.setdefault("client_name", f"Klient {st.session_state.client_counter}")
+# ustawiamy też początkową wartość dla widżetu
+st.session_state.setdefault("client_name_input", st.session_state.client_name)
 
 # --- Pole do wprowadzania nazwy klienta ---
 st.text_input(
@@ -666,9 +668,6 @@ st.text_input(
         "client_name": st.session_state.client_name_input
     })
 )
-
-# Synchronizacja nazwy klienta
-st.session_state.client_name = st.session_state.client_name_input
 
 # --- Wybór typu slotu ---
 slot_names = [s["name"] for s in st.session_state.slot_types] if st.session_state.get("slot_types") else ["Standard"]
@@ -755,7 +754,7 @@ else:
             st.session_state.client_counter += 1
             new_client_name = f"Klient {st.session_state.client_counter}"
             st.session_state.client_name = new_client_name
-            # nie ustawiamy client_name_input, żeby nie konfliktował z text_input
+            st.session_state.client_name_input = new_client_name  # ustawiamy też widżet bez błędu
 
             save_state_to_json()
             st.success(f"✅ Zarezerwowano slot dla {slot['client']}.")
@@ -774,7 +773,7 @@ if st.button("Zleć bez terminu", key="unscheduled_order"):
     st.session_state.client_counter += 1
     new_client_name = f"Klient {st.session_state.client_counter}"
     st.session_state.client_name = new_client_name
-    # nie ustawiamy client_name_input
+    st.session_state.client_name_input = new_client_name  # aktualizacja widżetu
 
     save_state_to_json()
     st.success(f"✅ Zlecenie dla {st.session_state.client_name} dodane do listy bez terminu.")
