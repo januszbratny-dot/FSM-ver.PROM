@@ -572,6 +572,11 @@ def get_available_slots_for_day(day: date, slot_minutes: int, step_minutes: int 
     logging.info(f"DEBUG: get_available_slots_for_day({day}) -> {len(result)} slots")
     return result
 
+# ------------------ inne ------------------
+
+def on_client_name_change():
+    logger.info(f"Zmieniono nazwę klienta na: {st.session_state.client_name}")
+
 # ---------------------- UI ----------------------
 st.set_page_config(page_title="Harmonogram slotów", layout="wide")
 st.title("📅 Harmonogram slotów - Tydzień")
@@ -644,9 +649,22 @@ if "unscheduled_orders" not in st.session_state:
     st.session_state.unscheduled_orders = []
 
 # Imię klienta
+if "client_name" not in st.session_state:
+    st.session_state.client_name = f"Klient {st.session_state.client_counter}"
+
+#with st.container():
+#    default_client = f"Klient {st.session_state.client_counter}"
+#    client_name = st.text_input("Nazwa klienta", value=default_client)
+
 with st.container():
-    default_client = f"Klient {st.session_state.client_counter}"
-    client_name = st.text_input("Nazwa klienta", value=default_client)
+    def on_client_name_change():
+        logger.info(f"Zmieniono nazwę klienta na: {st.session_state.client_name}")
+
+    st.text_input(
+        "Nazwa klienta",
+        key="client_name",
+        on_change=on_client_name_change
+    )
 
 # Wybór typu slotu
 slot_names = [s["name"] for s in st.session_state.slot_types]
@@ -679,12 +697,11 @@ booking_day = st.session_state.booking_day
 st.markdown("### 🕒 Dostępne sloty w wybranym dniu")
 slot_minutes = slot_type["minutes"]
 available_slots = get_available_slots_for_day(booking_day, slot_minutes)
-# 🧍‍♂️ Nazwa klienta (automatyczna lub ręczna)
-client_name = st.text_input(
-    "Nazwa klienta",
-    key="new_client_name",
-    value=f"Klient {st.session_state.client_counter}"
-)
+# 🧍‍♂️ Nazwa klienta (automatyczna lub ręczna) - uwuga dubel do usuniecia
+# client_name = st.text_input("Nazwa klienta",key="new_client_name",value=f"Klient {st.session_state.client_counter}") 
+
+client_name = st.session_state.client_name
+
 
 if not available_slots:
     st.info("Brak dostępnych slotów dla wybranego dnia.")
@@ -761,15 +778,13 @@ else:
             }
             add_slot_to_brygada(brygada, booking_day, slot)
             st.session_state.client_counter += 1
+            st.session_state.client_name = f"Klient {st.session_state.client_counter}"
             save_state_to_json()
             st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {brygada}.")
             st.rerun()
-            st.session_state.new_client_name = f"Klient {st.session_state.client_counter}"
             
 
-
-
-
+            
 # --- Przycisk zleć bez terminu ---
 st.markdown("### ⏳ Przekazanie zlecenia do Dyspozytora")
 if st.button("Zleć bez terminu", key="unscheduled_order"):
@@ -779,9 +794,12 @@ if st.button("Zleć bez terminu", key="unscheduled_order"):
         "created": datetime.now().isoformat()
     })
     st.session_state.client_counter += 1
+    st.session_state.client_name = f"Klient {st.session_state.client_counter}"
     save_state_to_json()  # zapis do pliku
     st.success(f"✅ Zlecenie dla {client_name} dodane do listy bez terminu.")
     st.rerun()
+    
+
 
 
 
