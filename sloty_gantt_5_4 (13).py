@@ -654,50 +654,34 @@ st.sidebar.write(f"Tydzień: {week_days[0].strftime('%d-%m-%Y')} – {week_days[
 st.subheader("➕ Rezerwacja terminu")
 
 # Inicjalizacja listy zleceń bez terminu
-if "unscheduled_orders" not in st.session_state:
-    st.session_state.unscheduled_orders = []
+st.session_state.setdefault("unscheduled_orders", [])
 
 # Inicjalizacja licznika klienta, jeśli nie istnieje
-if "client_counter" not in st.session_state:
-    st.session_state.client_counter = 1
+st.session_state.setdefault("client_counter", 1)
+st.session_state.setdefault("client_name", f"Klient {st.session_state.client_counter}")
+st.session_state.setdefault("client_name_input", st.session_state.client_name)
 
-# Inicjalizacja domyślnej nazwy klienta
-if "client_name_input" not in st.session_state:
-    st.session_state.client_name_input = f"Klient {st.session_state.client_counter}"
-    st.session_state.client_name = st.session_state.client_name_input
-
-# Pole do wprowadzania nazwy klienta
-client_name = st.text_input(
+# --- Pole do wprowadzania nazwy klienta ---
+st.text_input(
     "Nazwa klienta",
     key="client_name_input"
 )
 
-# Aktualizacja session_state z widżetu
-st.session_state.client_name = client_name
+# Synchronizacja nazwy klienta z widżetem
+st.session_state.client_name = st.session_state.client_name_input
 
-# Funkcja do inkrementacji klienta po rezerwacji lub zleceniu bez terminu
-def increment_client():
-    st.session_state.client_counter += 1
-    new_name = f"Klient {st.session_state.client_counter}"
-    st.session_state.client_name = new_name
-    st.session_state.client_name_input = new_name
-
-# Wybór typu slotu
-slot_names = [s["name"] for s in st.session_state.slot_types] if "slot_types" in st.session_state else []
-if not slot_names:
-    slot_names = ["Standard"]
+# --- Wybór typu slotu ---
+slot_names = [s["name"] for s in st.session_state.slot_types] if st.session_state.get("slot_types") else ["Standard"]
+if not st.session_state.get("slot_types"):
     st.session_state.slot_types = [{"name": "Standard", "minutes": 60, "weight": 1.0}]
-
 auto_type = weighted_choice(st.session_state.slot_types) or slot_names[0]
 idx = slot_names.index(auto_type) if auto_type in slot_names else 0
 slot_type_name = st.selectbox("Typ slotu", slot_names, index=idx)
 slot_type = next((s for s in st.session_state.slot_types if s["name"] == slot_type_name), slot_names[0])
 slot_duration = timedelta(minutes=slot_type["minutes"])
 
-# Navigator dni dla rezerwacji
-if "booking_day" not in st.session_state:
-    st.session_state.booking_day = date.today()
-
+# --- Navigator dni dla rezerwacji ---
+st.session_state.setdefault("booking_day", date.today())
 col_prev, col_mid, col_next = st.columns([1, 2, 1])
 with col_prev:
     if st.button("⬅️ Poprzedni dzień", key="booking_prev"):
@@ -718,6 +702,7 @@ available_slots = get_available_slots_for_day(booking_day, slot_minutes)
 if not available_slots:
     st.info("Brak dostępnych slotów dla wybranego dnia.")
 else:
+    # CSS dla przycisków
     st.markdown("""
     <style>
     div.stButton > button:first-child {
@@ -730,7 +715,7 @@ else:
     for i, s in enumerate(available_slots):
         col1, col2, col3, col4 = st.columns([1.2, 2, 1, 1])
 
-        # Obliczenie przedziału przyjazdu
+        # Przedział przyjazdu
         if s.get("arrival_window_start") and s.get("arrival_window_end"):
             arr_start_dt = s["arrival_window_start"]
             arr_end_dt = s["arrival_window_end"]
@@ -741,21 +726,13 @@ else:
             wh_start, wh_end = st.session_state.working_hours.get(brygada_for_display, (DEFAULT_WORK_START, DEFAULT_WORK_END))
             wh_start_dt = datetime.combine(booking_day, wh_start)
             wh_end_dt = datetime.combine(booking_day, wh_end)
-            if wh_end_dt <= wh_start_dt:  # nocna zmiana
+            if wh_end_dt <= wh_start_dt:
                 wh_end_dt += timedelta(days=1)
             start_dt = s["start"]
             arr_start_dt = start_dt - timedelta(minutes=czas_przed)
             arr_end_dt = start_dt + timedelta(minutes=czas_po)
-            if arr_start_dt < wh_start_dt:
-                arr_start_dt = wh_start_dt
-                arr_end_dt = arr_start_dt + timedelta(minutes=czas_przed + czas_po)
-            if arr_end_dt > wh_end_dt:
-                arr_end_dt = wh_end_dt
-                arr_start_dt = arr_end_dt - timedelta(minutes=czas_przed + czas_po)
-            if arr_start_dt < wh_start_dt:
-                arr_start_dt = wh_start_dt
-            if arr_end_dt > wh_end_dt:
-                arr_end_dt = wh_end_dt
+            arr_start_dt = max(arr_start_dt, wh_start_dt)
+            arr_end_dt = min(arr_end_dt, wh_end_dt)
 
         arr_str = f"{arr_start_dt.strftime('%H:%M')} – {arr_end_dt.strftime('%H:%M')}"
         col1.write(f"🚗 Przedział przyjazdu: {arr_str}")
@@ -774,9 +751,13 @@ else:
                 "client": st.session_state.client_name,
             }
             add_slot_to_brygada(brygada, booking_day, slot)
-            increment_client()
+
+            # zwiększamy klienta tylko w session_state, nie nadpisujemy widżetu
+            st.session_state.client_counter += 1
+            st.session_state.client_name = f"Klient {st.session_state.client_counter}"
+
             save_state_to_json()
-            st.success(f"✅ Zarezerwowano slot dla {st.session_state.client_name}.")
+            st.success(f"✅ Zarezerwowano slot dla {slot['client']}.")
             st.rerun()
 
 # --- Przycisk „Zleć bez terminu” ---
@@ -787,11 +768,11 @@ if st.button("Zleć bez terminu", key="unscheduled_order"):
         "slot_type": slot_type_name,
         "created": datetime.now().isoformat()
     })
-    increment_client()
+    st.session_state.client_counter += 1
+    st.session_state.client_name = f"Klient {st.session_state.client_counter}"
     save_state_to_json()
-    st.success(f"✅ Zlecenie dla {client_name} dodane do listy bez terminu.")
+    st.success(f"✅ Zlecenie dla {st.session_state.client_name} dodane do listy bez terminu.")
     st.rerun()
-
 
 
 # ---------------------- AUTO-FILL FULL DAY (BEZPIECZNY) ----------------------
