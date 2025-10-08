@@ -777,7 +777,7 @@ else:
             increment_client()
             save_state_to_json()
             st.success(f"✅ Zarezerwowano slot dla {st.session_state.client_name}.")
-            st.experimental_rerun()
+            st.rerun()
 
 # --- Przycisk „Zleć bez terminu” ---
 st.markdown("### ⏳ Przekazanie zlecenia do Dyspozytora")
@@ -790,7 +790,7 @@ if st.button("Zleć bez terminu", key="unscheduled_order"):
     increment_client()
     save_state_to_json()
     st.success(f"✅ Zlecenie dla {client_name} dodane do listy bez terminu.")
-    st.experimental_rerun()
+    st.rerun()
 
 
 
