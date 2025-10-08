@@ -729,8 +729,8 @@ else:
             st.session_state.client_counter += 1
             save_state_to_json()
             st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {brygada}.")
-            st.rerun()
             st.session_state.new_client_name = f"Klient {st.session_state.client_counter}"
+            st.rerun()
 
 
 
