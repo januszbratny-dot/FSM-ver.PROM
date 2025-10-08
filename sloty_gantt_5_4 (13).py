@@ -657,7 +657,6 @@ st.subheader("➕ Rezerwacja terminu")
 st.session_state.setdefault("unscheduled_orders", [])
 st.session_state.setdefault("client_counter", 1)
 st.session_state.setdefault("client_name", f"Klient {st.session_state.client_counter}")
-# ustawiamy też początkową wartość dla widżetu
 st.session_state.setdefault("client_name_input", st.session_state.client_name)
 
 # --- Pole do wprowadzania nazwy klienta ---
@@ -750,15 +749,13 @@ else:
             }
             add_slot_to_brygada(brygada, booking_day, slot)
 
-            # automatyczne przypisanie nowego klienta
+            # automatyczne przypisanie nowego klienta tylko do client_name, widżet sam się zaktualizuje
             st.session_state.client_counter += 1
-            new_client_name = f"Klient {st.session_state.client_counter}"
-            st.session_state.client_name = new_client_name
-            st.session_state.client_name_input = new_client_name  # ustawiamy też widżet bez błędu
+            st.session_state.client_name = f"Klient {st.session_state.client_counter}"
 
             save_state_to_json()
             st.success(f"✅ Zarezerwowano slot dla {slot['client']}.")
-            st.rerun()
+            erun()  # używamy erun() zamiast experimental_rerun
 
 # --- Przycisk „Zleć bez terminu” ---
 st.markdown("### ⏳ Przekazanie zlecenia do Dyspozytora")
@@ -769,15 +766,14 @@ if st.button("Zleć bez terminu", key="unscheduled_order"):
         "created": datetime.now().isoformat()
     })
 
-    # automatyczne przypisanie nowego klienta
+    # automatyczne przypisanie nowego klienta tylko do client_name
     st.session_state.client_counter += 1
-    new_client_name = f"Klient {st.session_state.client_counter}"
-    st.session_state.client_name = new_client_name
-    st.session_state.client_name_input = new_client_name  # aktualizacja widżetu
+    st.session_state.client_name = f"Klient {st.session_state.client_counter}"
 
     save_state_to_json()
     st.success(f"✅ Zlecenie dla {st.session_state.client_name} dodane do listy bez terminu.")
-    st.rerun()
+    erun()  # używamy erun()
+
 
 
 
