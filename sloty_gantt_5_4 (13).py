@@ -662,9 +662,11 @@ with st.container():
 
     st.text_input(
         "Nazwa klienta",
-        key="client_name",
-        on_change=on_client_name_change
+        key="client_name_input",
+        value=st.session_state.get("client_name", f"Klient {st.session_state.client_counter}"),
     )
+    st.session_state.client_name = st.session_state.client_name_input
+
 
 # Wybór typu slotu
 slot_names = [s["name"] for s in st.session_state.slot_types]
