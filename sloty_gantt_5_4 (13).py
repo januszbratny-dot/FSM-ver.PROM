@@ -768,20 +768,25 @@ else:
         # Rezerwacja slotu - zielony przycisk
         btn_html = f'<div class="green-button"><button>Zarezerwuj</button></div>'
         if col4.button("Zarezerwuj", key=f"book_{i}"):
-            brygada = s['brygady'][0]  # wybieramy pierwszą dostępną brygadę
+            brygada = s['brygady'][0]
             slot = {
                 "start": s["start"],
                 "end": s["end"],
                 "slot_type": slot_type_name,
                 "duration_min": slot_minutes,
-                "client": client_name,
+                "client": st.session_state.client_name,
             }
             add_slot_to_brygada(brygada, booking_day, slot)
             st.session_state.client_counter += 1
-            st.session_state.client_name = f"Klient {st.session_state.client_counter}"
+            
+            # 🟢 zamiast bezpośredniego przypisania do client_name:
+            new_name = f"Klient {st.session_state.client_counter}"
+            st.session_state.update({"client_name": new_name})
+            
             save_state_to_json()
-            st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {brygada}.")
+            st.success(f"✅ Zarezerwowano slot dla {st.session_state.client_name}.")
             st.rerun()
+
             
 
             
