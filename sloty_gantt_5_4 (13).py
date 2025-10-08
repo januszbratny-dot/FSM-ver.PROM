@@ -662,7 +662,50 @@ else:
     for i, s in enumerate(available_slots):
         col1, col2, col3, col4 = st.columns([1.2, 2, 1, 1])
         # Start i Koniec
-        col1.write(f"🚗 Przedział przyjazdu: {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
+        #col1.write(f"🚗 Przedział przyjazdu: {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
+
+        # pokaż przedział przyjazdu tak jak w tabeli (najpierw sprawdź, czy pole istnieje; jeśli nie — oblicz)
+        if s.get("arrival_window_start") and s.get("arrival_window_end"):
+            arr_start_dt = s["arrival_window_start"]
+            arr_end_dt = s["arrival_window_end"]
+        else:
+            # użyj pierwszej dostępnej brygady do obliczenia przedziału (tak jak przy dodawaniu slotu)
+            brygada_for_display = s["brygady"][0] if s.get("brygady") else (st.session_state.brygady[0] if st.session_state.brygady else None)
+            try:
+                czas_przed = int(st.session_state.get("czas_rezerwowy_przed", 90))
+                czas_po = int(st.session_state.get("czas_rezerwowy_po", 90))
+            except Exception:
+                czas_przed = 90
+                czas_po = 90
+        
+            wh_start, wh_end = st.session_state.working_hours.get(brygada_for_display, (DEFAULT_WORK_START, DEFAULT_WORK_END))
+            wh_start_dt = datetime.combine(booking_day, wh_start)
+            wh_end_dt = datetime.combine(booking_day, wh_end)
+            if wh_end_dt <= wh_start_dt:  # nocna zmiana
+                wh_end_dt += timedelta(days=1)
+        
+            start_dt = s["start"]
+            arr_start_dt = start_dt - timedelta(minutes=czas_przed)
+            arr_end_dt = start_dt + timedelta(minutes=czas_po)
+        
+            if arr_start_dt < wh_start_dt:
+                arr_start_dt = wh_start_dt
+                arr_end_dt = arr_start_dt + timedelta(minutes=czas_przed + czas_po)
+        
+            if arr_end_dt > wh_end_dt:
+                arr_end_dt = wh_end_dt
+                arr_start_dt = arr_end_dt - timedelta(minutes=czas_przed + czas_po)
+        
+            # ostateczne przycięcie na wypadek krótkiego dnia
+            if arr_start_dt < wh_start_dt:
+                arr_start_dt = wh_start_dt
+            if arr_end_dt > wh_end_dt:
+                arr_end_dt = wh_end_dt
+        
+        arr_str = f"{arr_start_dt.strftime('%H:%M')} – {arr_end_dt.strftime('%H:%M')}"
+        col1.write(f"🚗 Przedział przyjazdu: {arr_str}")
+
+
         # Dostępne brygady
         col2.write(f"👷 Brygady: {', '.join(s['brygady'])}")
         # Rezerwacja slotu - zielony przycisk
