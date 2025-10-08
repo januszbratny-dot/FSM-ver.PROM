@@ -667,10 +667,10 @@ def increment_client():
     st.session_state.client_name = f"Klient {st.session_state.client_counter}"
 
 # --- Pole do wprowadzania nazwy klienta ---
+# Ważne: nie ustawiamy value=..., tylko używamy key
 st.text_input(
     "Nazwa klienta",
     key="client_name_input",
-    value=st.session_state.client_name_input,
     on_change=lambda: st.session_state.update({
         "client_name": st.session_state.client_name_input
     })
