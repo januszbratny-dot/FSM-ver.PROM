@@ -662,13 +662,9 @@ st.session_state.setdefault("booking_day", date.today())
 
 # --- Funkcja pomocnicza ---
 def increment_client():
-    """Zwiększa licznik klienta i ustawia nową nazwę w session_state."""
+    """Zwiększa licznik klienta i ustawia nową nazwę w client_name."""
     st.session_state.client_counter += 1
-    new_name = f"Klient {st.session_state.client_counter}"
-    st.session_state.update({
-        "client_name": new_name,
-        "client_name_input": new_name
-    })
+    st.session_state.client_name = f"Klient {st.session_state.client_counter}"
 
 # --- Pole do wprowadzania nazwy klienta ---
 st.text_input(
@@ -775,7 +771,6 @@ if st.button("Zleć bez terminu", key="unscheduled_order"):
     save_state_to_json()
     st.success(f"✅ Zlecenie dla {st.session_state.unscheduled_orders[-1]['client']} dodane do listy bez terminu.")
     st.rerun()
-
 
 
 # ---------------------- AUTO-FILL FULL DAY (BEZPIECZNY) ----------------------
