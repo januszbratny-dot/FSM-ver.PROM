@@ -77,6 +77,17 @@ def parse_time_str(t: str) -> time:
                 continue
     raise ValueError(f"Nie można sparsować czasu: {t}")
 
+
+def _normalize_loaded_state():
+    for b, days in st.session_state.schedules.items():
+        for d, slots in days.items():
+            for s in slots:
+                for k in ("start","end","arrival_window_start","arrival_window_end"):
+                    v = s.get(k)
+                    if isinstance(v, datetime) and v.tzinfo is not None:
+                        s[k] = v.astimezone().replace(tzinfo=None)
+
+
 # ---------------------- PERSISTENCE ----------------------
 
 def schedules_to_jsonable() -> Dict:
@@ -172,6 +183,7 @@ def load_state_from_json(filename: str = STORAGE_FILENAME) -> bool:
     st.session_state.unscheduled_orders = data.get("unscheduled_orders", [])  # <--- dodane
     logger.info(f"State loaded from {filename}")
     return True
+    _normalize_loaded_state()
 
 
 # ---------------------- INITIALIZATION ----------------------
