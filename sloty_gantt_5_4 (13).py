@@ -166,11 +166,17 @@ def load_state_from_json(filename: str = STORAGE_FILENAME) -> bool:
 
 if "slot_types" not in st.session_state:
     if not load_state_from_json():
+
         st.session_state.slot_types = [
-            {"name": "Standard", "minutes": 60, "weight": 1.0}
+            {"name": "Zlecenie krótkie", "minutes": 30, "weight": 1.0},
+            {"name": "Zlecenie normalne", "minutes": 60, "weight": 1.0},
+            {"name": "Zlecenie długie", "minutes": 90, "weight": 1.0}
         ]
         st.session_state.brygady = ["Brygada 1", "Brygada 2"]
-        st.session_state.working_hours = {}
+        st.session_state.working_hours = {
+            "Brygada 1": (DEFAULT_WORK_START, DEFAULT_WORK_END),  # 08:00–16:00
+            "Brygada 2": (time(12, 0), time(20, 0))             # 12:00–20:00
+        }
         st.session_state.schedules = {}
         st.session_state.clients_added = []
         st.session_state.balance_horizon = "week"
@@ -633,7 +639,6 @@ st.markdown("### 🕒 Dostępne sloty w wybranym dniu")
 
 slot_minutes = slot_type["minutes"]
 available_slots = get_available_slots_for_day(booking_day, slot_minutes)
-
 # ---- NOWY KOD: grupowanie po przedziale przyjazdu brygady ----
 slots_for_display = []
 
@@ -678,7 +683,8 @@ for s in available_slots:
         })
 
 # Sortowanie po czasie startu i brygadzie
-slots_for_display.sort(key=lambda x: (x["start"], x["arrival_window_start"], x["brygada"]
+slots_for_display.sort(key=lambda x: (x["start"], x["arrival_window_start"], x["brygada"]))
+
 
 if not available_slots:
     st.info("Brak dostępnych slotów dla wybranego dnia.")
@@ -713,6 +719,7 @@ else:
             st.session_state.client_counter += 1
             st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {s['brygada']}.")
             st.rerun()
+
 
 
 # --- Przycisk „Zleć bez terminu” ---
@@ -841,19 +848,6 @@ if df.empty:
 else:
     st.dataframe(df.drop(columns=["_id"]))
 
-# management: delete individual slots
-st.subheader("🧰 Zarządzaj slotami")
-if not df.empty:
-    for idx, row in df.iterrows():
-        cols = st.columns([1.2, 2, 1.2, 2, 1])
-        cols[0].write(row["Dzień"])
-        cols[1].write(f"**{row['Klient']}** — {row['Typ']}")
-        cols[2].write(f"{row['Start'].strftime('%H:%M')} - {row['Koniec'].strftime('%H:%M')}")
-        cols[3].write(row["Przedział przyjazdu"] if row["Przedział przyjazdu"] else "-")
-        if cols[4].button("Usuń", key=f"del_{row['Brygada']}_{row['_id']}"):
-            delete_slot(row["Brygada"], row["Dzień"], row["_id"])
-            st.rerun()
-
 # ---------------------- ZLECENIA BEZ TERMINU ----------------------
 st.subheader("⏳ Zlecenia bez terminu - Dyspozytor")
 
@@ -878,6 +872,32 @@ if st.session_state.unscheduled_orders:
             save_state_to_json()          # <- KLUCZ: zapisz zmiany!
             st.success(f"❌ Zlecenie {o['client']} usunięte.")
             st.rerun()
+
+#----------------------------------------------------
+# management: delete individual slots
+st.subheader("🧰 Zarządzaj slotami")
+
+# Nagłówek kolumn z tłem i pogrubieniem
+header_cols = st.columns([1, 2, 1, 1.2, 1, 1])
+headers = ["Dzień", "Klient + Typ", "Przedział przyjazdu", "Start – Koniec", "Brygada", "Akcje"]
+for col, title in zip(header_cols, headers):
+    col.markdown(f"<div style='background-color:#f0f0f0; font-weight:bold; padding:4px; border-radius:4px;'>{title}</div>", unsafe_allow_html=True)
+
+# Wiersze z danymi
+if not df.empty:
+    for idx, row in df.iterrows():
+        cols = st.columns([1, 2, 1, 1.2, 1, 1])
+        cols[0].write(row["Dzień"])
+        cols[1].write(f"**{row['Klient']}** — {row['Typ']}")
+        cols[2].write(row["Przedział przyjazdu"] if row["Przedział przyjazdu"] else "-")
+        cols[3].write(f"{row['Start'].strftime('%H:%M')} - {row['Koniec'].strftime('%H:%M')}")
+        cols[4].write(row["Brygada"])
+        if cols[5].button("Usuń", key=f"del_{row['Brygada']}_{row['_id']}"):
+            delete_slot(row["Brygada"], row["Dzień"], row["_id"])
+            st.success(f"✅ Slot dla {row['Klient']} w brygadzie {row['Brygada']} usunięty.")
+            st.rerun()
+
+
 
 # ---------------------- GANTT ----------------------
 if not df.empty:
