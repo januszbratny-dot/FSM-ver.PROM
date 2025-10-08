@@ -662,7 +662,7 @@ else:
     for i, s in enumerate(available_slots):
         col1, col2, col3, col4 = st.columns([1.2, 2, 1, 1])
         # Start i Koniec
-        col1.write(f"🚗 Przedział przyjazdu: s.get("arrival_window_start") and s.get("arrival_window_end") and f"{s['arrival_window_start'].strftime('%H:%M')} - {s['arrival_window_end'].strftime('%H:%M')}"
+        col1.write(f"🚗 Przedział przyjazdu: col1.write(f"🚗 Przedział przyjazdu: {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
         # Dostępne brygady
         col2.write(f"👷 Brygady: {', '.join(s['brygady'])}")
         # Rezerwacja slotu - zielony przycisk
