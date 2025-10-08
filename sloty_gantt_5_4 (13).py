@@ -578,10 +578,19 @@ def on_client_name_change():
     logger.info(f"Zmieniono nazwę klienta na: {st.session_state.client_name}")
 
 def increment_client():
+    # zwiększenie licznika klienta
     st.session_state.client_counter += 1
+
+    # nowa nazwa klienta
     new_name = f"Klient {st.session_state.client_counter}"
+
+    # aktualizacja session_state
     st.session_state.client_name = new_name
-    st.session_state.client_name_input = new_name
+
+    # jeśli widżet istnieje, synchronizujemy go
+    if "client_name_input" in st.session_state:
+        st.session_state.client_name_input = new_name
+
 
 # ---------------------- UI ----------------------
 st.set_page_config(page_title="Harmonogram slotów", layout="wide")
@@ -659,13 +668,20 @@ if "client_name" not in st.session_state:
     st.session_state.client_name = f"Klient {st.session_state.client_counter}"
 
 with st.container():
-    st.session_state.setdefault("client_name_input", f"Klient {st.session_state.client_counter}")
+    # upewnij się, że klucz istnieje
+    st.session_state.setdefault(
+        "client_name_input", f"Klient {st.session_state.client_counter}"
+    )
+
     st.text_input(
         "Nazwa klienta",
         key="client_name_input",
         value=st.session_state.client_name_input,
     )
+
+    # synchronizacja nazwy klienta z widżetem
     st.session_state.client_name = st.session_state.client_name_input
+
 
 
 # Wybór typu slotu
