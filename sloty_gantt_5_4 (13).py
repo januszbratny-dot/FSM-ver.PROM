@@ -634,6 +634,52 @@ st.markdown("### 🕒 Dostępne sloty w wybranym dniu")
 slot_minutes = slot_type["minutes"]
 available_slots = get_available_slots_for_day(booking_day, slot_minutes)
 
+# ---- NOWY KOD: grupowanie po przedziale przyjazdu brygady ----
+slots_for_display = []
+
+for s in available_slots:
+    try:
+        czas_przed = int(st.session_state.get("czas_rezerwowy_przed", 90))
+        czas_po = int(st.session_state.get("czas_rezerwowy_po", 90))
+    except Exception:
+        czas_przed = 90
+        czas_po = 90
+
+    for brygada in s.get("brygady", []):
+        wh_start, wh_end = st.session_state.working_hours.get(brygada, (DEFAULT_WORK_START, DEFAULT_WORK_END))
+        wh_start_dt = datetime.combine(booking_day, wh_start)
+        wh_end_dt = datetime.combine(booking_day, wh_end)
+        if wh_end_dt <= wh_start_dt:  # nocna zmiana
+            wh_end_dt += timedelta(days=1)
+
+        start_dt = s["start"]
+        arr_start_dt = start_dt - timedelta(minutes=czas_przed)
+        arr_end_dt = start_dt + timedelta(minutes=czas_po)
+
+        if arr_start_dt < wh_start_dt:
+            arr_start_dt = wh_start_dt
+            arr_end_dt = arr_start_dt + timedelta(minutes=czas_przed + czas_po)
+
+        if arr_end_dt > wh_end_dt:
+            arr_end_dt = wh_end_dt
+            arr_start_dt = arr_end_dt - timedelta(minutes=czas_przed + czas_po)
+
+        # ostateczne przycięcie
+        arr_start_dt = max(arr_start_dt, wh_start_dt)
+        arr_end_dt = min(arr_end_dt, wh_end_dt)
+
+        # dodajemy osobny rekord dla każdej brygady/przedziału
+        slots_for_display.append({
+            "start": s["start"],
+            "end": s["end"],
+            "brygada": brygada,
+            "arrival_window_start": arr_start_dt,
+            "arrival_window_end": arr_end_dt
+        })
+
+# Sortowanie po czasie startu i brygadzie
+slots_for_display.sort(key=lambda x: (x["start"], x["arrival_window_start"], x["brygada"]
+
 if not available_slots:
     st.info("Brak dostępnych slotów dla wybranego dnia.")
 else:
@@ -648,44 +694,14 @@ else:
     </style>
     """, unsafe_allow_html=True)
     
-    for i, s in enumerate(available_slots):
-        col1, col2, col4 = st.columns([2, 2, 1])
-
-        # Wyświetl godzinę slotu
-        # col1.write(f"🕐 {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
-
-        # Przedział przyjazdu
-        if s.get("arrival_window_start") and s.get("arrival_window_end"):
-            arr_start_dt = s["arrival_window_start"]
-            arr_end_dt = s["arrival_window_end"]
-        else:
-            brygada_for_display = s["brygady"][0] if s.get("brygady") else (st.session_state.brygady[0] if st.session_state.brygady else None)
-            czas_przed = int(st.session_state.get("czas_rezerwowy_przed", 90))
-            czas_po = int(st.session_state.get("czas_rezerwowy_po", 90))
-            wh_start, wh_end = st.session_state.working_hours.get(brygada_for_display, (DEFAULT_WORK_START, DEFAULT_WORK_END))
-            wh_start_dt = datetime.combine(booking_day, wh_start)
-            wh_end_dt = datetime.combine(booking_day, wh_end)
-            if wh_end_dt <= wh_start_dt:
-                wh_end_dt += timedelta(days=1)
-            start_dt = s["start"]
-            arr_start_dt = max(start_dt - timedelta(minutes=czas_przed), wh_start_dt)
-            arr_end_dt = min(start_dt + timedelta(minutes=czas_po), wh_end_dt)
-
-        arr_str = f"{arr_start_dt.strftime('%H:%M')} – {arr_end_dt.strftime('%H:%M')}"
-        col1.write(f"🚗 Przedział przyjazdu: {arr_str}")
-
-        # Wyświetl dostępne brygady
-        col2.write(f"👷 Brygady: {', '.join(s['brygady'])}")
-
-        # Oblicz przedział przyjazdu na podstawie ustawień
-        #czas_przed = int(st.session_state.get('czas_rezerwowy_przed', 90))
-        #czas_po = int(st.session_state.get('czas_rezerwowy_po', 90))
-        #arrival_start, arrival_end = oblicz_przedzial_przyjazdu(s['start'], czas_przed, czas_po)
-        #col3.write(f"🚗 Przedział przyjazdu: {arrival_start.strftime('%H:%M')} – {arrival_end.strftime('%H:%M')}")
-
-        # Przycisk rezerwacji slotu
-        if col4.button("Zarezerwuj w tym slocie", key=f"book_{i}"):
-            brygada = s['brygady'][0]  # wybieramy pierwszą dostępną brygadę
+    for i, s in enumerate(slots_for_display):
+        col0, col1, col2, col3 = st.columns([2, 2, 2, 1])
+    
+        col0.write(f"🚗 Slot pracy: {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
+        col1.write(f"🚗 Przedział przyjazdu: {s['arrival_window_start'].strftime('%H:%M')} – {s['arrival_window_end'].strftime('%H:%M')}")
+        col2.write(f"👷 Brygada: {s['brygada']}")
+    
+        if col3.button("Zarezerwuj w tym slocie", key=f"book_{i}"):
             slot = {
                 "start": s["start"],
                 "end": s["end"],
@@ -693,10 +709,11 @@ else:
                 "duration_min": slot_minutes,
                 "client": client_name,
             }
-            add_slot_to_brygada(brygada, booking_day, slot)
+            add_slot_to_brygada(s["brygada"], booking_day, slot)
             st.session_state.client_counter += 1
-            st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {brygada}.")
+            st.success(f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} w brygadzie {s['brygada']}.")
             st.rerun()
+
 
 # --- Przycisk „Zleć bez terminu” ---
 st.markdown("### ⏳ Przekazanie zlecenia do Dyspozytora")
