@@ -713,8 +713,10 @@ else:
         if col4.button("Zarezerwuj", key=f"book_{i}"):
             brygada = s['brygady'][0]  # wybieramy pierwszą dostępną brygadę
         
-            # wyciągamy godziny pracy brygady (potrzebne dla logiki okna przyjazdu)
-            work_start, work_end = st.session_state["working_hours"][brygada].values()
+            # 🛡️ Bezpieczne pobranie godzin pracy
+            working_hours = st.session_state.get("working_hours", {})
+            brygada_hours = working_hours.get(brygada, {"start": time(8, 0), "end": time(16, 0)})
+            work_start, work_end = brygada_hours["start"], brygada_hours["end"]
         
             add_slot_to_brygada(
                 brygada=brygada,
@@ -726,16 +728,13 @@ else:
                 work_end=work_end,
             )
         
-            # ✅ zwiększamy licznik klienta po rezerwacji
             st.session_state.client_counter += 1
-        
             st.success(
                 f"✅ Zarezerwowano slot {s['start'].strftime('%H:%M')}–{s['end'].strftime('%H:%M')} "
                 f"w brygadzie {brygada}."
             )
-        
-            # natychmiastowe odświeżenie UI (pokazuje zaktualizowany stan i nową nazwę klienta)
             st.rerun()
+
 
 
 # --- Przycisk zleć bez terminu ---
