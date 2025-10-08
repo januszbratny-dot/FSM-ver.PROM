@@ -155,7 +155,12 @@ def load_state_from_json(filename: str = STORAGE_FILENAME) -> bool:
 
     st.session_state.working_hours = {}
     for b, wh in data.get("working_hours", {}).items():
-        st.session_state.working_hours[b] = (parse_time_str(wh[0]), parse_time_str(wh[1]))
+        try:
+            st.session_state.working_hours[b] = (parse_time_str(wh[0]), parse_time_str(wh[1]))
+        except Exception:
+            logger.exception(f"Invalid working_hours for {b}, setting defaults")
+            st.session_state.working_hours[b] = (DEFAULT_WORK_START, DEFAULT_WORK_END)
+
 
     st.session_state.schedules = {}
     for b, days in data.get("schedules", {}).items():
