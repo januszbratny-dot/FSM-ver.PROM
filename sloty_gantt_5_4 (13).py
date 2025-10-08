@@ -703,7 +703,7 @@ else:
     for i, s in enumerate(slots_for_display):
         col0, col1, col2, col3 = st.columns([2, 2, 2, 1])
     
-        col0.write(f"🚗 Slot pracy: {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
+        col0.write(f"🕒 Slot pracy: {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
         col1.write(f"🚗 Przedział przyjazdu: {s['arrival_window_start'].strftime('%H:%M')} – {s['arrival_window_end'].strftime('%H:%M')}")
         col2.write(f"👷 Brygada: {s['brygada']}")
     
