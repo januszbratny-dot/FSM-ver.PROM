@@ -182,6 +182,8 @@ if "slot_types" not in st.session_state:
         st.session_state.balance_horizon = "week"
         st.session_state.client_counter = 1
         st.session_state.not_found_counter = 0
+        st.session_state.unscheduled_orders = []
+
 
 # stable keys for widgets (avoid using raw brygada names as keys)
 def brygada_key(i: int, field: str) -> str:
@@ -703,10 +705,9 @@ else:
     for i, s in enumerate(slots_for_display):
         col0, col1, col2, col3 = st.columns([2, 2, 2, 1])
     
-        
-        col0.write(f"🚗 Przedział przyjazdu: {s['arrival_window_start'].strftime('%H:%M')} – {s['arrival_window_end'].strftime('%H:%M')}")
-        col1.write(f"👷 Brygada: {s['brygada']}")
-        col2.write(f"🛠️ Slot pracy: {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
+        col0.write(f"🛠️ Slot pracy: {s['start'].strftime('%H:%M')} – {s['end'].strftime('%H:%M')}")
+        col1.write(f"🚗 Przedział przyjazdu: {s['arrival_window_start'].strftime('%H:%M')} – {s['arrival_window_end'].strftime('%H:%M')}")
+        col2.write(f"👷 Brygada: {s['brygada']}")
     
         if col3.button("Zarezerwuj w tym slocie", key=f"book_{i}"):
             slot = {
@@ -849,6 +850,79 @@ if df.empty:
 else:
     st.dataframe(df.drop(columns=["_id"]))
 
+# ---------------------- GANTT 2 ----------------------
+st.subheader(f"📊 Gantt dnia: {booking_day.strftime('%A, %d %B %Y')} – Praca i przedział przyjazdu (osobno dla każdej brygady)")
+
+for b in st.session_state.brygady:
+    d_str = booking_day.strftime("%Y-%m-%d")
+    slots = st.session_state.schedules.get(b, {}).get(d_str, [])
+    if not slots:
+        st.info(f"Brak slotów dla {b} w wybranym dniu.")
+        continue
+
+    dual_slots_day = []
+    for s in slots:
+        y_label = f"{s['client']}"
+
+        # Slot pracy
+        dual_slots_day.append({
+            "Y": y_label,
+            "Typ": "Slot pracy",
+            "Start": s["start"],
+            "Koniec": s["end"],
+        })
+
+        # Przedział przyjazdu
+        if s.get("arrival_window_start") and s.get("arrival_window_end"):
+            dual_slots_day.append({
+                "Y": y_label,
+                "Typ": "Przedział przyjazdu",
+                "Start": s["arrival_window_start"],
+                "Koniec": s["arrival_window_end"],
+            })
+
+    df_dual_day = pd.DataFrame(dual_slots_day)
+    if df_dual_day.empty:
+        st.info(f"Brak slotów do wyświetlenia dla brygady {b}.")
+        continue
+
+    fig_day = px.timeline(
+        df_dual_day,
+        x_start="Start",
+        x_end="Koniec",
+        y="Y",
+        color="Typ",
+        color_discrete_map={
+            "Slot pracy": "#1f77b4",
+            "Przedział przyjazdu": "#ff7f0e"
+        },
+        hover_data=["Typ"]
+    )
+
+    for trace in fig_day.data:
+        if trace.name == "Przedział przyjazdu":
+            trace.opacity = 0.3
+        else:
+            trace.opacity = 1.0
+
+    fig_day.update_yaxes(autorange="reversed")
+
+    # Dodanie preferowanych przedziałów w tle
+    for label, (s, e) in PREFERRED_SLOTS.items():
+        fig_day.add_vrect(
+            x0=datetime.combine(booking_day, s),
+            x1=datetime.combine(booking_day, e),
+            fillcolor="rgba(200,200,200,0.15)",
+            opacity=0.2,
+            layer="below",
+            line_width=0
+        )
+        fig_day.add_vline(x=datetime.combine(booking_day, s), line_width=1, line_dash="dot")
+        fig_day.add_vline(x=datetime.combine(booking_day, e), line_width=1, line_dash="dot")
+
+    st.markdown(f"### Brygada: {b}")
+    st.plotly_chart(fig_day, use_container_width=True)
+
 # ---------------------- ZLECENIA BEZ TERMINU ----------------------
 st.subheader("⏳ Zlecenia bez terminu - Dyspozytor")
 
@@ -873,6 +947,8 @@ if st.session_state.unscheduled_orders:
             save_state_to_json()          # <- KLUCZ: zapisz zmiany!
             st.success(f"❌ Zlecenie {o['client']} usunięte.")
             st.rerun()
+
+
 
 #----------------------------------------------------
 # management: delete individual slots
@@ -900,6 +976,11 @@ if not df.empty:
 
 
 
+
+
+
+
+
 # ---------------------- GANTT ----------------------
 if not df.empty:
     st.subheader("📊 Wykres Gantta - tydzień")
@@ -913,6 +994,7 @@ if not df.empty:
             fig.add_vline(x=datetime.combine(d, e), line_width=1, line_dash="dot")
 
     st.plotly_chart(fig, use_container_width=True)
+
 
 # ---------------------- PODSUMOWANIE ----------------------
 st.subheader("📌 Podsumowanie")
@@ -981,3 +1063,77 @@ def _run_basic_tests():
 
 if os.environ.get("RUN_SCHEDULE_TESTS"):
     _run_basic_tests()
+
+
+# ---------------------- GANTT 1-DNIOWY: Praca + Przedział przyjazdu ----------------------
+st.subheader(f"📊 Gantt dnia: {booking_day.strftime('%A, %d %B %Y')} – Praca i przedział przyjazdu")
+
+dual_slots_day = []
+for b in st.session_state.brygady:
+    d_str = booking_day.strftime("%Y-%m-%d")
+    slots = st.session_state.schedules.get(b, {}).get(d_str, [])
+    for s in slots:
+        y_label = f"{b} – {s['client']}"
+
+        # Slot pracy
+        dual_slots_day.append({
+            "Y": y_label,
+            "Typ": "Slot pracy",
+            "Start": s["start"],
+            "Koniec": s["end"],
+        })
+
+        # Przedział przyjazdu
+        if s.get("arrival_window_start") and s.get("arrival_window_end"):
+            dual_slots_day.append({
+                "Y": y_label,
+                "Typ": "Przedział przyjazdu",
+                "Start": s["arrival_window_start"],
+                "Koniec": s["arrival_window_end"],
+            })
+
+df_dual_day = pd.DataFrame(dual_slots_day)
+
+if not df_dual_day.empty:
+    fig_day = px.timeline(
+        df_dual_day,
+        x_start="Start",
+        x_end="Koniec",
+        y="Y",
+        color="Typ",
+        color_discrete_map={
+            "Slot pracy": "#1f77b4",
+            "Przedział przyjazdu": "#ff7f0e"
+        },
+        hover_data=["Typ"]
+    )
+
+    # Ustawienie przezroczystości dla przedziału przyjazdu
+    for trace in fig_day.data:
+        if trace.name == "Przedział przyjazdu":
+            trace.opacity = 0.3
+        else:
+            trace.opacity = 1.0
+
+    fig_day.update_yaxes(autorange="reversed")  # od góry w dół
+
+    # Dodanie preferowanych przedziałów w tle
+    for label, (s, e) in PREFERRED_SLOTS.items():
+        fig_day.add_vrect(
+            x0=datetime.combine(booking_day, s),
+            x1=datetime.combine(booking_day, e),
+            fillcolor="rgba(200,200,200,0.15)",
+            opacity=0.2,
+            layer="below",
+            line_width=0
+        )
+        fig_day.add_vline(x=datetime.combine(booking_day, s), line_width=1, line_dash="dot")
+        fig_day.add_vline(x=datetime.combine(booking_day, e), line_width=1, line_dash="dot")
+
+    st.plotly_chart(fig_day, use_container_width=True)
+else:
+    st.info("Brak slotów do wyświetlenia dla wybranego dnia.")
+
+#--------------
+
+
