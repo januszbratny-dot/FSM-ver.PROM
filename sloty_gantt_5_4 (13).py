@@ -7,6 +7,16 @@ import json
 import tempfile
 import logging
 import uuid
+import locale
+
+# Ustawienie polskiego locale do dat (jeśli dostępne)
+try:
+    locale.setlocale(locale.LC_TIME, 'pl_PL.UTF-8')
+except locale.Error:
+    try:
+        locale.setlocale(locale.LC_TIME, 'pl_PL')
+    except locale.Error:
+        pass  # Jeśli nie ma polskiego locale, zostaw domyślne
 from datetime import datetime, timedelta, date, time
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Tuple, Optional
@@ -272,11 +282,11 @@ def add_slot_to_brygada(brygada: str, day: date, slot: Dict, save: bool = True):
 
     # Pobierz czasy rezerwowe
     try:
-        czas_przed = int(st.session_state.get("czas_rezerwowy_przed", 90))
-        czas_po = int(st.session_state.get("czas_rezerwowy_po", 90))
+        czas_przed = int(st.session_state.get("czas_rezerwowy_przed", 30))
+        czas_po = int(st.session_state.get("czas_rezerwowy_po", 30))
     except Exception:
-        czas_przed = 90
-        czas_po = 90
+        czas_przed = 30
+        czas_po = 30
 
     # Godziny pracy brygady
     wh_start, wh_end = st.session_state.working_hours.get(brygada, (DEFAULT_WORK_START, DEFAULT_WORK_END))
@@ -311,9 +321,18 @@ def add_slot_to_brygada(brygada: str, day: date, slot: Dict, save: bool = True):
         s["arrival_window_start"] = None
         s["arrival_window_end"] = None
 
-    # Zapisz slot
-    st.session_state.schedules[brygada][d].append(s)
-    st.session_state.schedules[brygada][d].sort(key=lambda x: x["start"])
+
+    # Wstaw slot w odpowiednie miejsce (utrzymuj listę posortowaną po 'start')
+    slots = st.session_state.schedules[brygada][d]
+    # Jeśli lista pusta lub nowy slot na końcu
+    if not slots or s["start"] >= slots[-1]["start"]:
+        slots.append(s)
+    else:
+        # Znajdź miejsce do wstawienia (bisect)
+        import bisect
+        starts = [slot["start"] for slot in slots]
+        idx = bisect.bisect_left(starts, s["start"])
+        slots.insert(idx, s)
 
     if save:
         save_state_to_json()
@@ -579,15 +598,32 @@ with st.sidebar:
     st.subheader("🕓 Czas rezerwowy (przyjazd Brygady)")
     st.write("Ustaw w minutach: przed i po czasie rozpoczęcia slotu.")
     st.session_state.czas_rezerwowy_przed = st.number_input(
-        "Czas rezerwowy przed (minuty)", min_value=0, max_value=180, value=90, step=5, key="czas_przed"
+        "Czas rezerwowy przed (minuty)", min_value=0, max_value=180, value=30, step=5, key="czas_przed"
     )
     st.session_state.czas_rezerwowy_po = st.number_input(
-        "Czas rezerwowy po (minuty)", min_value=0, max_value=180, value=90, step=5, key="czas_po"
+        "Czas rezerwowy po (minuty)", min_value=0, max_value=180, value=30, step=5, key="czas_po"
     )
 
 # week navigation
 if "week_offset" not in st.session_state:
     st.session_state.week_offset = 0
+
+def polish_date(dt):
+    dni_polskie = {
+        'Monday': 'Poniedziałek',
+        'Tuesday': 'Wtorek',
+        'Wednesday': 'Środa',
+        'Thursday': 'Czwartek',
+        'Friday': 'Piątek',
+        'Saturday': 'Sobota',
+        'Sunday': 'Niedziela',
+    }
+    try:
+        day_en = dt.strftime("%A")
+        day_pl = dni_polskie.get(day_en, day_en)
+        return f"{day_pl}, {dt.strftime('%d.%m.%Y')}"
+    except Exception:
+        return str(dt)
 
 with st.sidebar:
     st.subheader("⬅️ Wybór tygodnia")
@@ -599,7 +635,7 @@ with st.sidebar:
 
 week_ref = date.today() + timedelta(weeks=st.session_state.week_offset)
 week_days = get_week_days(week_ref)
-st.sidebar.write(f"Tydzień: {week_days[0].strftime('%d-%m-%Y')} – {week_days[-1].strftime('%d-%m-%Y')}")
+st.sidebar.write(f"Tydzień: {polish_date(week_days[0])} – {polish_date(week_days[-1])}")
 
 # ---------------------- Dodaj klienta (zmieniony UI: wybór dostępnego slotu) ----------------------
 st.subheader("➕ Rezerwacja terminu")
@@ -620,19 +656,26 @@ slot_type_name = st.selectbox("Typ slotu", slot_names, index=idx)
 slot_type = next((s for s in st.session_state.slot_types if s["name"] == slot_type_name), slot_names[0])
 slot_duration = timedelta(minutes=slot_type["minutes"])
 
-# Navigator dni dla rezerwacji (pojedynczy dzień, z możliwością przejścia)
+
+# Synchronizacja wyboru daty z autofill
 if "booking_day" not in st.session_state:
     st.session_state.booking_day = date.today()
+if "autofill_day_full" in st.session_state:
+    # Jeśli zmieniono datę w autofill, ustaw ją w booking_day
+    if st.session_state.booking_day != st.session_state.autofill_day_full:
+        st.session_state.booking_day = st.session_state.autofill_day_full
 
 col_prev, col_mid, col_next = st.columns([1, 2, 1])
 with col_prev:
     if st.button("⬅️ Poprzedni dzień", key="booking_prev"):
         st.session_state.booking_day -= timedelta(days=1)
+        st.session_state.autofill_day_full = st.session_state.booking_day
 with col_next:
     if st.button("Następny dzień ➡️", key="booking_next"):
         st.session_state.booking_day += timedelta(days=1)
+        st.session_state.autofill_day_full = st.session_state.booking_day
 with col_mid:
-    st.markdown(f"### {st.session_state.booking_day.strftime('%A, %d %B %Y')}")
+    st.markdown(f"### {polish_date(st.session_state.booking_day)}")
 
 booking_day = st.session_state.booking_day
 
@@ -640,17 +683,41 @@ booking_day = st.session_state.booking_day
 st.markdown("### 🕒 Dostępne sloty w wybranym dniu")
 
 slot_minutes = slot_type["minutes"]
-available_slots = get_available_slots_for_day(booking_day, slot_minutes)
-# ---- NOWY KOD: grupowanie po przedziale przyjazdu brygady ----
-slots_for_display = []
 
+# Funkcja do znalezienia najbliższego dnia z dostępnymi slotami
+def find_next_day_with_slots(start_day, slot_minutes, max_days=30):
+    for offset in range(max_days):
+        test_day = start_day + timedelta(days=offset)
+        slots = get_available_slots_for_day(test_day, slot_minutes)
+        if slots:
+            return test_day, slots
+    return start_day, []
+
+available_slots = get_available_slots_for_day(booking_day, slot_minutes)
+
+# Jeśli nie ma slotów, automatycznie przełącz na najbliższy dzień z dostępnymi slotami
+if not available_slots:
+    next_day, next_slots = find_next_day_with_slots(booking_day, slot_minutes)
+    if next_slots and next_day != booking_day:
+        st.session_state.booking_day = next_day
+        booking_day = next_day
+        available_slots = next_slots
+        st.markdown(f"""
+        <div style='background-color:#fff9c4; color:#333; border-radius:6px; padding:12px; border:1px solid #ffe082; font-size:1.1em; margin-bottom:1em;'>
+        <b>Brak terminu w wybranym dniu.</b><br>Najbliższe wolne terminy są dostępne w dniu: <b>{polish_date(booking_day)}</b>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.info("Brak dostępnych slotów dla wybranego dnia.")
+
+slots_for_display = []
 for s in available_slots:
     try:
-        czas_przed = int(st.session_state.get("czas_rezerwowy_przed", 90))
-        czas_po = int(st.session_state.get("czas_rezerwowy_po", 90))
+        czas_przed = int(st.session_state.get("czas_rezerwowy_przed", 30))
+        czas_po = int(st.session_state.get("czas_rezerwowy_po", 30))
     except Exception:
-        czas_przed = 90
-        czas_po = 90
+        czas_przed = 30
+        czas_po = 30
 
     for brygada in s.get("brygady", []):
         wh_start, wh_end = st.session_state.working_hours.get(brygada, (DEFAULT_WORK_START, DEFAULT_WORK_END))
@@ -687,10 +754,7 @@ for s in available_slots:
 # Sortowanie po czasie startu i brygadzie
 slots_for_display.sort(key=lambda x: (x["start"], x["arrival_window_start"], x["brygada"]))
 
-
-if not available_slots:
-    st.info("Brak dostępnych slotów dla wybranego dnia.")
-else:
+if available_slots:
     # Zielony CSS dla przycisków
     st.markdown("""
     <style>
@@ -745,12 +809,17 @@ if st.button("Zleć bez terminu", key="unscheduled_order"):
 # ---------------------- AUTO-FILL FULL DAY (BEZPIECZNY) ----------------------
 st.subheader("⚡ Automatyczne dociążenie wszystkich brygad")
 
-# wybór dnia do autofill
+
+# wybór dnia do autofill zsynchronizowany z booking_day
+if "autofill_day_full" not in st.session_state:
+    st.session_state.autofill_day_full = st.session_state.booking_day
 day_autofill = st.date_input(
     "Dzień do wypełnienia (pełny dzień)",
-    value=date.today(),
     key="autofill_day_full"
 )
+# Synchronizacja booking_day z autofill_day_full
+if st.session_state.booking_day != st.session_state.autofill_day_full:
+    st.session_state.booking_day = st.session_state.autofill_day_full
 
 # przycisk uruchamiający autofill
 if st.button("🚀 Wypełnij cały dzień do 100%"):
@@ -851,7 +920,7 @@ else:
     st.dataframe(df.drop(columns=["_id"]))
 
 # ---------------------- GANTT 2 ----------------------
-st.subheader(f"📊 Gantt dnia: {booking_day.strftime('%A, %d %B %Y')} – Praca i przedział przyjazdu (osobno dla każdej brygady)")
+st.subheader(f"📊 Gantt dnia: {polish_date(booking_day)} – Praca i przedział przyjazdu (osobno dla każdej brygady)")
 
 for b in st.session_state.brygady:
     d_str = booking_day.strftime("%Y-%m-%d")
@@ -954,6 +1023,59 @@ if st.session_state.unscheduled_orders:
 # management: delete individual slots
 st.subheader("🧰 Zarządzaj slotami")
 
+
+
+# --- FILTRY ---
+with st.expander("Filtry", expanded=True):
+    colf1, colf2, colf3, colf4 = st.columns(4)
+    brygady_options = ["(wszystkie)"] + sorted(df["Brygada"].unique()) if not df.empty else ["(wszystkie)"]
+    typy_options = ["(wszystkie)"] + sorted(df["Typ"].dropna().unique()) if not df.empty else ["(wszystkie)"]
+    klienci_options = ["(wszyscy)"] + sorted(df["Klient"].dropna().unique()) if not df.empty else ["(wszyscy)"]
+    # Daty w polskim formacie i z polskim dniem tygodnia
+    def polish_day(date_str):
+        dni_polskie = {
+            'Monday': 'Poniedziałek',
+            'Tuesday': 'Wtorek',
+            'Wednesday': 'Środa',
+            'Thursday': 'Czwartek',
+            'Friday': 'Piątek',
+            'Saturday': 'Sobota',
+            'Sunday': 'Niedziela',
+        }
+        try:
+            d = datetime.strptime(date_str, "%Y-%m-%d")
+            day_en = d.strftime("%A")
+            day_pl = dni_polskie.get(day_en, day_en)
+            return f"{day_pl}, {d.strftime('%d.%m.%Y')}"
+        except Exception:
+            return date_str
+    dni_raw = sorted(df["Dzień"].unique()) if not df.empty else []
+    dni_options = ["(wszystkie)"] + [polish_day(d) for d in dni_raw]
+
+    brygada_filter = colf1.selectbox("Brygada", brygady_options, key="filter_brygada")
+    typ_filter = colf2.selectbox("Typ slotu", typy_options, key="filter_typ")
+    klient_filter = colf3.selectbox("Klient", klienci_options, key="filter_klient")
+    dzien_filter = colf4.selectbox("Dzień", dni_options, key="filter_dzien")
+
+# --- FILTROWANIE ---
+filtered_df = df.copy()
+if not df.empty:
+    if brygada_filter != "(wszystkie)":
+        filtered_df = filtered_df[filtered_df["Brygada"] == brygada_filter]
+    if typ_filter != "(wszystkie)":
+        filtered_df = filtered_df[filtered_df["Typ"] == typ_filter]
+    if klient_filter != "(wszyscy)":
+        filtered_df = filtered_df[filtered_df["Klient"] == klient_filter]
+    if dzien_filter != "(wszystkie)":
+        # Porównuj po polskim formacie
+        def polish_day(date_str):
+            try:
+                d = datetime.strptime(date_str, "%Y-%m-%d")
+                return d.strftime("%A, %d.%m.%Y").capitalize()
+            except Exception:
+                return date_str
+        filtered_df = filtered_df[filtered_df["Dzień"].apply(lambda d: polish_day(d) == dzien_filter)]
+
 # Nagłówek kolumn z tłem i pogrubieniem
 header_cols = st.columns([1, 2, 1, 1.2, 1, 1])
 headers = ["Dzień", "Klient + Typ", "Przedział przyjazdu", "Start – Koniec", "Brygada", "Akcje"]
@@ -961,10 +1083,27 @@ for col, title in zip(header_cols, headers):
     col.markdown(f"<div style='background-color:#f0f0f0; font-weight:bold; padding:4px; border-radius:4px;'>{title}</div>", unsafe_allow_html=True)
 
 # Wiersze z danymi
-if not df.empty:
-    for idx, row in df.iterrows():
+if not filtered_df.empty:
+    for idx, row in filtered_df.iterrows():
         cols = st.columns([1, 2, 1, 1.2, 1, 1])
-        cols[0].write(row["Dzień"])
+        # Wyświetl dzień po polsku
+        try:
+            dni_polskie = {
+                'Monday': 'Poniedziałek',
+                'Tuesday': 'Wtorek',
+                'Wednesday': 'Środa',
+                'Thursday': 'Czwartek',
+                'Friday': 'Piątek',
+                'Saturday': 'Sobota',
+                'Sunday': 'Niedziela',
+            }
+            d = datetime.strptime(row["Dzień"], "%Y-%m-%d")
+            day_en = d.strftime("%A")
+            day_pl = dni_polskie.get(day_en, day_en)
+            dzien_polski = f"{day_pl}, {d.strftime('%d.%m.%Y')}"
+        except Exception:
+            dzien_polski = row["Dzień"]
+        cols[0].write(dzien_polski)
         cols[1].write(f"**{row['Klient']}** — {row['Typ']}")
         cols[2].write(row["Przedział przyjazdu"] if row["Przedział przyjazdu"] else "-")
         cols[3].write(f"{row['Start'].strftime('%H:%M')} - {row['Koniec'].strftime('%H:%M')}")
@@ -1066,7 +1205,7 @@ if os.environ.get("RUN_SCHEDULE_TESTS"):
 
 
 # ---------------------- GANTT 1-DNIOWY: Praca + Przedział przyjazdu ----------------------
-st.subheader(f"📊 Gantt dnia: {booking_day.strftime('%A, %d %B %Y')} – Praca i przedział przyjazdu")
+st.subheader(f"📊 Gantt dnia: {polish_date(booking_day)} – Praca i przedział przyjazdu")
 
 dual_slots_day = []
 for b in st.session_state.brygady:
@@ -1135,5 +1274,3 @@ else:
     st.info("Brak slotów do wyświetlenia dla wybranego dnia.")
 
 #--------------
-
-
