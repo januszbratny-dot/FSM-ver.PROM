@@ -441,73 +441,104 @@ def get_week_days(reference_day: date) -> List[date]:
     return [monday + timedelta(days=i) for i in range(7)]
 
 
-def get_available_slots_for_day(
-    brygada: str,
-    day: date,
-    slot_duration: timedelta,
-    search_from_end: bool = False,
-    overbooking: int = 0,
-) -> List[tuple[datetime, datetime]]:
-    """
-    Zwraca listę dostępnych slotów (start, end) dla danej brygady i dnia.
-    Uwzględnia godziny pracy, istniejące sloty oraz dozwolony overbooking (w minutach).
-    Jeśli search_from_end=True — planowanie wstecz od końca dnia.
+def get_available_slots_for_day(day: date, slot_minutes: int, step_minutes: int = SEARCH_STEP_MINUTES) -> List[Dict]:
+    """Zwraca sloty, które można przydzielić na początku/końcu dnia pracy
+    lub które bezpośrednio sąsiadują z już zarezerwowanymi slotami.
+    Uwzględnia parametr overbooking (w minutach).
     """
 
-    working_hours = st.session_state.working_hours.get(brygada, ("08:00", "16:00"))
-    wh_start, wh_end = working_hours
-    wh_start_dt = datetime.combine(day, wh_start)
-    wh_end_dt = datetime.combine(day, wh_end)
-    if wh_end <= wh_start:  # zmiana nocna
-        wh_end_dt += timedelta(days=1)
+    available_slots = []
+    overbooking = int(st.session_state.get("overbooking", 0))
 
-    # Zbierz wszystkie istniejące sloty tej brygady na ten dzień
-    existing_slots = st.session_state.schedules.get(brygada, {}).get(day.strftime("%Y-%m-%d"), [])
-    used_intervals = [(s["start"], s["end"]) for s in existing_slots if s["start"] and s["end"]]
+    for brygada, working_hours in st.session_state.working_hours.items():
+        wh_start, wh_end = working_hours
+        wh_start_dt = datetime.combine(day, wh_start)
+        wh_end_dt = datetime.combine(day, wh_end)
+        if wh_end_dt <= wh_start_dt:
+            wh_end_dt += timedelta(days=1)
 
-    valid: list[tuple[datetime, datetime]] = []
+        slots = get_day_slots_for_brygada(brygada, day)
+        used_intervals = [(s["start"], s["end"]) for s in slots]
+        candidates = []
 
-    # Szukanie od początku dnia
-    if not search_from_end:
-        current = wh_start_dt
-        while current + slot_duration <= wh_end_dt + timedelta(minutes=overbooking):
-            end = current + slot_duration
+        if not used_intervals:
+            # Brak rezerwacji -> pokaż początek i koniec dnia pracy
+            start_dt = wh_start_dt
+            end_dt = start_dt + timedelta(minutes=slot_minutes)
+            if end_dt <= wh_end_dt:
+                candidates.append((start_dt, end_dt))
 
-            # Sprawdź kolizje z istniejącymi slotami, z uwzględnieniem overbookingu
-            overlap = any(
-                not (  # brak kolizji tylko, gdy nowy slot kończy się przed startem istniejącego
-                       # lub zaczyna się po końcu istniejącego pomniejszonym o overbooking
-                    end <= u_start or current >= u_end - timedelta(minutes=overbooking)
-                )
-                for (u_start, u_end) in used_intervals
+            end_dt = wh_end_dt
+            start_dt = end_dt - timedelta(minutes=slot_minutes)
+            if start_dt >= wh_start_dt:
+                candidates.append((start_dt, end_dt))
+        else:
+            # Sloty przylegające
+            for s in used_intervals:
+                # Slot przed istniejącym
+                before_end = s[0]
+                before_start = before_end - timedelta(minutes=slot_minutes)
+                if before_start >= wh_start_dt:
+                    candidates.append((before_start, before_end))
+
+                # Slot po istniejącym (uwzględnij overbooking)
+                after_start = s[1] - timedelta(minutes=overbooking)
+                after_end = after_start + timedelta(minutes=slot_minutes)
+                if after_end <= wh_end_dt:
+                    candidates.append((after_start, after_end))
+
+            # Brzegowe – jeśli pierwszy slot nie sięga początku pracy
+            first_slot_start = min(s[0] for s in used_intervals)
+            if first_slot_start > wh_start_dt:
+                start_dt = wh_start_dt
+                end_dt = start_dt + timedelta(minutes=slot_minutes)
+                if end_dt <= first_slot_start:
+                    candidates.append((start_dt, end_dt))
+
+            # Brzegowe – jeśli ostatni slot nie sięga końca pracy
+            last_slot_end = max(s[1] for s in used_intervals)
+            if last_slot_end < wh_end_dt:
+                end_dt = wh_end_dt
+                start_dt = end_dt - timedelta(minutes=slot_minutes)
+                if start_dt >= last_slot_end:
+                    candidates.append((start_dt, end_dt))
+
+        # Filtr kolizji (dla pewności)
+        valid = []
+        for c_start, c_end in candidates:
+            overlaps = any(
+                not (c_end <= u_start or c_start >= u_end - timedelta(minutes=overbooking))
+                for u_start, u_end in used_intervals
             )
+            if not overlaps:
+                valid.append((c_start, c_end))
 
-            if not overlap:
-                valid.append((current, end))
-            current += timedelta(minutes=SEARCH_STEP_MINUTES)
+        # Dodaj sloty do listy
+        for start_dt, end_dt in sorted(set(valid)):
+            available_slots.append({
+                "brygada": brygada,
+                "start": start_dt,
+                "end": end_dt,
+                "slot_type": None
+            })
 
-    # Szukanie od końca dnia (symetryczna logika)
-    else:
-        current = wh_end_dt - slot_duration
-        while current >= wh_start_dt - timedelta(minutes=overbooking):
-            end = current + slot_duration
+    # Agregacja duplikatów między brygadami
+    grouped = {}
+    for s in available_slots:
+        key = (s["start"], s["end"])
+        grouped.setdefault(key, []).append(s["brygada"])
 
-            overlap = any(
-                not (  # brak kolizji tylko, gdy nowy slot kończy się przed startem istniejącego
-                       # powiększonym o overbooking (symetrycznie!)
-                    end <= u_start + timedelta(minutes=overbooking)
-                    or current >= u_end
-                )
-                for (u_start, u_end) in used_intervals
-            )
+    result = []
+    for (start_dt, end_dt), brygady in grouped.items():
+        result.append({
+            "start": start_dt,
+            "end": end_dt,
+            "brygady": brygady
+        })
 
-            if not overlap:
-                valid.append((current, end))
-            current -= timedelta(minutes=SEARCH_STEP_MINUTES)
-
-    # Posortuj wyniki rosnąco po czasie startu (dla przejrzystości)
-    valid.sort(key=lambda x: x[0])
-    return valid
+    result.sort(key=lambda x: x["start"])
+    logging.info(f"DEBUG: get_available_slots_for_day({day}) -> {len(result)} slots")
+    return result
 
 # ---------------------- UI ----------------------
 st.set_page_config(page_title="Harmonogram slotów", layout="wide")
