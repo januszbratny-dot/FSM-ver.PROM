@@ -1,0 +1,88 @@
+{
+  "slot_types": [
+    {
+      "name": "Zlecenie krótkie",
+      "minutes": 30,
+      "weight": 1.0
+    },
+    {
+      "name": "Zlecenie normalne",
+      "minutes": 60,
+      "weight": 1.0
+    },
+    {
+      "name": "Zlecenie długie",
+      "minutes": 90,
+      "weight": 1.0
+    }
+  ],
+  "brygady": [
+    "Brygada 1",
+    "Brygada 2"
+  ],
+  "working_hours": {
+    "Brygada 1": [
+      "08:00:00",
+      "16:00:00"
+    ],
+    "Brygada 2": [
+      "12:00:00",
+      "20:00:00"
+    ]
+  },
+  "schedules": {
+    "Brygada 1": {
+      "2025-10-15": [
+        {
+          "id": "ee3f2ce7-3c14-4fb5-a6eb-5e22d6596f72",
+          "start": "2025-10-15T08:00:00",
+          "end": "2025-10-15T09:30:00",
+          "slot_type": "Zlecenie długie",
+          "duration_min": 90,
+          "client": "Klient 1",
+          "pref_range": null,
+          "arrival_window_start": "2025-10-15T08:00:00",
+          "arrival_window_end": "2025-10-15T11:00:00"
+        },
+        {
+          "id": "afe73229-8190-44dc-89cf-92887e9f2b49",
+          "start": "2025-10-15T09:15:00",
+          "end": "2025-10-15T10:45:00",
+          "slot_type": "Zlecenie długie",
+          "duration_min": 90,
+          "client": "Klient 2",
+          "pref_range": null,
+          "arrival_window_start": "2025-10-15T08:00:00",
+          "arrival_window_end": "2025-10-15T11:00:00"
+        },
+        {
+          "id": "34d1b808-adb5-4833-999f-cf993fa33179",
+          "start": "2025-10-15T10:30:00",
+          "end": "2025-10-15T12:00:00",
+          "slot_type": "Zlecenie długie",
+          "duration_min": 90,
+          "client": "Klient 3",
+          "pref_range": null,
+          "arrival_window_start": "2025-10-15T09:00:00",
+          "arrival_window_end": "2025-10-15T12:00:00"
+        },
+        {
+          "id": "bdedd7a1-cc1c-4c5b-87e9-0809eaf1888d",
+          "start": "2025-10-15T11:45:00",
+          "end": "2025-10-15T12:45:00",
+          "slot_type": "Zlecenie normalne",
+          "duration_min": 60,
+          "client": "Klient 4",
+          "pref_range": null,
+          "arrival_window_start": "2025-10-15T10:15:00",
+          "arrival_window_end": "2025-10-15T13:15:00"
+        }
+      ]
+    },
+    "Brygada 2": {}
+  },
+  "clients_added": [],
+  "balance_horizon": "week",
+  "client_counter": 4,
+  "not_found_counter": 0
+}
